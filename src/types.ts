@@ -1,7 +1,6 @@
 import { Context } from 'telegraf';
 
 export interface TaskConfig {
-  id?: number;
   name: string;
   ollama_host: string;
   model: string;
@@ -9,6 +8,8 @@ export interface TaskConfig {
   duration: string;
   tags: string;
   url: string;
+  chatId: number;
+  id?: number;
 }
 
 export interface TaskDTO {
@@ -19,6 +20,7 @@ export interface TaskDTO {
   duration: string;
   tags: string;
   url: string;
+  chatId: number;
 }
 
 export interface SessionData {
@@ -30,4 +32,5 @@ export interface SessionData {
 
 export interface BotContext extends Context {
   session: SessionData;
+  match?: RegExpMatchArray;
 }

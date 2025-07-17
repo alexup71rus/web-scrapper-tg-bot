@@ -25,15 +25,17 @@ export function getTaskListKeyboard(tasks: TaskConfig[], page: number) {
 export function getTaskActionsKeyboard(taskId: number) {
   return Markup.inlineKeyboard([
     [
-      Markup.button.callback('Back', 'back_to_list'),
       Markup.button.callback('Run', `action_${taskId}_run`),
-      Markup.button.callback('Edit', `action_${taskId}_edit`),
-      Markup.button.callback('Delete', `action_${taskId}_delete`),
+      Markup.button.callback('Edit', `action_${taskId}_edit`)
     ],
+    [
+      Markup.button.callback('Delete', `action_${taskId}_delete`),
+      Markup.button.callback('Back', 'back_to_list')
+    ]
   ]);
 }
 
-export function getEditTaskKeyboard(taskId: number) {
+export function getEditTaskKeyboard() {
   return Markup.inlineKeyboard([
     [Markup.button.callback('Cancel', 'cancel_edit')]
   ]);

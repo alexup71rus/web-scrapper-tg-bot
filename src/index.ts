@@ -4,6 +4,8 @@ import LocalSession from 'telegraf-session-local';
 import { setupCommands } from './commands';
 import { BotContext } from './types';
 import { initDb } from './migrations';
+import { scheduleTasks } from './scheduler';
+import { saveDb } from './services/database';
 
 dotenv.config();
 
@@ -27,6 +29,9 @@ try {
     { command: 'create', description: 'Create a new task' },
     { command: 'list', description: 'List all tasks' },
   ]);
+  dbPromise.then(db => scheduleTasks(bot, db)).catch(err => {
+    console.error('❌ Error in scheduleTasks:', err);
+  });
 } catch (err) {
   console.error('❌ Error in setupCommands:', err);
 }
@@ -48,10 +53,3 @@ process.once('SIGTERM', async () => {
   const db = await dbPromise;
   await saveDb(db);
 });
-
-// Save database to file
-async function saveDb(db: any) {
-  const fs = await import('fs/promises');
-  const data = db.export();
-  await fs.writeFile('./tasks.db', Buffer.from(data));
-}

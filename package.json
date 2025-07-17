@@ -10,16 +10,20 @@
   },
   "dependencies": {
     "dotenv": "^16.4.5",
-    "telegraf": "^4.16.3",
-    "telegraf-session-local": "^2.1.1",
+    "node-cron": "^3.0.3",
+    "ollama": "^0.5.9",
+    "puppeteer": "^23.5.3",
+    "sql-highlight": "^6.1.0",
     "sql.js": "^1.13.0",
-    "sql-highlight": "^6.1.0"
+    "telegraf": "^4.16.3",
+    "telegraf-session-local": "^2.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.7.4",
+    "@types/node-cron": "^3.0.11",
+    "@types/sql.js": "^1.4.9",
     "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2",
-    "@types/sql.js": "^1.4.9"
+    "typescript": "^5.6.2"
   }
 }

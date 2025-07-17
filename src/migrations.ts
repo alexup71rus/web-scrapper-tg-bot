@@ -7,18 +7,15 @@ export async function initDb(): Promise<Database> {
   const SQL = await initSqlJs();
   let db: Database;
 
-  // Try to load existing database
   try {
     const fileBuffer = await fs.readFile('./tasks.db');
     db = new SQL.Database(fileBuffer);
     console.log('Loaded existing database from tasks.db');
   } catch (err) {
-    // If file doesn't exist, create new database
     db = new SQL.Database();
     console.log('Created new in-memory database');
   }
 
-  // Ensure migrations folder exists
   const migrationsDir = path.resolve('./migrations');
   try {
     await fs.mkdir(migrationsDir, { recursive: true });
@@ -27,7 +24,6 @@ export async function initDb(): Promise<Database> {
     throw err;
   }
 
-  // Load and apply migrations
   try {
     const migrationFiles = await fs.readdir(migrationsDir).catch(() => []);
     const tsFiles = migrationFiles.filter(file => file.endsWith('.ts')).sort();
@@ -56,13 +52,12 @@ export async function initDb(): Promise<Database> {
   return db;
 }
 
-// Run migrations independently
 export async function runMigrations() {
   const db = await initDb();
   console.log('Migrations applied successfully');
   const data = db.export();
   await fs.writeFile('./tasks.db', Buffer.from(data));
-  db.close();
+  return db;
 }
 
 if (require.main === module) {

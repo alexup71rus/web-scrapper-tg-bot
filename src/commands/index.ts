@@ -15,7 +15,7 @@ import { saveDb, getTasks, getTaskById } from '../services/database';
 import { isValidTaskDTO, isValidTaskConfigForEdit } from '../utils/validation';
 import { getTaskListKeyboard } from '../keyboard';
 import * as cron from 'node-cron';
-import { updateTask } from '../scheduler';
+import { scheduleTasks } from '../scheduler';
 
 export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promise<Database>) {
   const db = await dbPromise;
@@ -32,7 +32,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
   bot.action('back_to_list', (ctx) => handleBackToList(ctx, db));
   bot.action(/page_(\d+)/, (ctx) => handlePage(ctx, db));
   bot.action(/action_(\d+)_(.+)/, (ctx) => handleAction(ctx, db, bot));
-  bot.action(/confirm_delete_(\d+)/, (ctx) => handleConfirmDelete(ctx, db));
+  bot.action(/confirm_delete_(\d+)/, (ctx) => handleConfirmDelete(ctx, db, bot));
   bot.action('cancel_delete', (ctx) => handleCancelDelete(ctx));
   bot.action('cancel_edit', (ctx) => handleCancelEdit(ctx, db));
 
@@ -56,7 +56,15 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
         stmt.run();
         stmt.free();
         await saveDb(db);
-        await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
+        const tasks = await getTasks(db);
+        const newTask = tasks.find(t => t.name === taskConfig.name && t.chatId === taskConfig.chatId);
+        if (newTask && newTask.duration && cron.validate(newTask.duration)) {
+          await scheduleTasks(bot, db);
+          await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
+        } else {
+          await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled due to invalid cron expression.`);
+          console.error(`Failed to schedule new task ${taskConfig.name}: Invalid cron or task not found`);
+        }
         ctx.session.awaitingCreate = false;
       } else if (ctx.session.awaitingEdit) {
         const config: Partial<TaskConfig> = JSON.parse(ctx.message.text);
@@ -73,7 +81,15 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
           stmt.run();
           stmt.free();
           await saveDb(db);
-          await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
+          const tasks = await getTasks(db);
+          const newTask = tasks.find(t => t.name === taskConfig.name && t.chatId === taskConfig.chatId);
+          if (newTask && newTask.duration && cron.validate(newTask.duration)) {
+            await scheduleTasks(bot, db);
+            await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
+          } else {
+            await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled due to invalid cron expression.`);
+            console.error(`Failed to schedule new task ${taskConfig.name}: Invalid cron or task not found`);
+          }
           ctx.session.awaitingEdit = null;
         } else {
           const taskConfig = { ...config, chatId: ctx.chat.id };
@@ -90,10 +106,10 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
           await saveDb(db);
           const task = await getTaskById(db, ctx.session.awaitingEdit);
           if (task && task.duration && cron.validate(task.duration)) {
-            await updateTask(ctx.session.awaitingEdit, bot, db);
+            await scheduleTasks(bot, db);
             await ctx.reply(`Task "${taskConfig.name}" updated successfully! Use /list to view all tasks.`);
           } else {
-            await ctx.reply(`Task "${taskConfig.name}" updated in database, but failed to schedule due to invalid cron expression.`);
+            await ctx.reply(`Task "${taskConfig.name}" updated in database but not scheduled due to invalid cron expression.`);
             console.error(`Failed to schedule task ${ctx.session.awaitingEdit}: Invalid cron or task not found`);
           }
           ctx.session.awaitingEdit = null;

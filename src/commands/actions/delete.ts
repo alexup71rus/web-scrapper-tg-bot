@@ -2,8 +2,10 @@ import { BotContext } from '../../types';
 import { Database } from 'sql.js';
 import { saveDb, getTasks } from '../../services/database';
 import { getTaskListKeyboard } from '../../keyboard';
+import { scheduleTasks } from '../../scheduler';
+import { Telegraf } from 'telegraf';
 
-export async function handleConfirmDelete(ctx: BotContext, db: Database) {
+export async function handleConfirmDelete(ctx: BotContext, db: Database, bot: Telegraf<BotContext>) {
   try {
     if (!ctx.match) {
       throw new Error('No match data for delete confirmation');
@@ -15,6 +17,7 @@ export async function handleConfirmDelete(ctx: BotContext, db: Database) {
       stmt.run();
       stmt.free();
       await saveDb(db);
+      await scheduleTasks(bot, db);
       await ctx.reply('Task deleted successfully.');
       ctx.session.deleteConfirm = null;
       const tasks = await getTasks(db);

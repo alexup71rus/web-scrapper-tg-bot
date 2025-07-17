@@ -1,6 +1,6 @@
 import { Database } from 'sql.js';
 import { TaskConfig } from './types';
-import { getTasks, getTaskById } from './services/database';
+import { getTasks } from './services/database';
 import * as cron from 'node-cron';
 import { ScheduledTask } from 'node-cron';
 import { parseSite } from './parser';
@@ -46,24 +46,9 @@ export async function scheduleTasks(bot: Telegraf<BotContext>, db: Database) {
         await bot.telegram.sendMessage(task.chatId, result);
       });
       scheduledTasks.set(task.id, scheduledTask);
+    } else {
+      console.error(`Failed to schedule task ${task.name || 'unknown'}: Invalid cron or task ID`);
     }
-  }
-}
-
-export async function updateTask(taskId: number, bot: Telegraf<BotContext>, db: Database) {
-  const oldTask = scheduledTasks.get(taskId);
-  if (oldTask) {
-    oldTask.stop();
-    scheduledTasks.delete(taskId);
-  }
-
-  const task = await getTaskById(db, taskId);
-  if (task && task.duration && cron.validate(task.duration) && task.id !== undefined) {
-    const scheduledTask = cron.schedule(task.duration, async () => {
-      const result = await executeTask(task, bot);
-      await bot.telegram.sendMessage(task.chatId, result);
-    });
-    scheduledTasks.set(task.id, scheduledTask);
   }
 }
 

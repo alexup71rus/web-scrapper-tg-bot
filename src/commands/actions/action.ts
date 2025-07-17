@@ -2,10 +2,9 @@ import { BotContext, TaskConfig } from '../../types';
 import { Database } from 'sql.js';
 import { getEditTaskKeyboard } from '../../keyboard';
 import { Markup } from 'telegraf';
-import { executeTask, updateTask } from '../../scheduler';
+import { executeTask } from '../../scheduler';
 import { Telegraf } from 'telegraf';
-import { getTaskById, saveDb } from '../../services/database';
-import { isValidTaskConfig } from '../../utils/validation';
+import { getTaskById } from '../../services/database';
 
 export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<BotContext>) {
   try {
@@ -86,33 +85,5 @@ export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<
   } catch (err) {
     console.error('❌ Error in action:', err);
     await ctx.reply('Error executing action.');
-  }
-}
-
-export async function handleEditSubmit(ctx: BotContext, db: Database, bot: Telegraf<BotContext>) {
-  try {
-    if (!ctx.message || !('text' in ctx.message)) {
-      throw new Error('No message text provided');
-    }
-    const taskId = ctx.session.awaitingEdit;
-    if (!taskId) {
-      throw new Error('No task ID for edit');
-    }
-    const jsonConfig = JSON.parse(ctx.message.text);
-    if (!isValidTaskConfig(jsonConfig)) {
-      throw new Error('Invalid task config');
-    }
-    const task: TaskConfig = jsonConfig;
-    db.run(
-      `UPDATE tasks SET name = ?, url = ?, tags = ?, duration = ?, model = ?, prompt = ?, chatId = ?, ollama_host = ? WHERE id = ?`,
-      [task.name, task.url, task.tags, task.duration, task.model, task.prompt, task.chatId, task.ollama_host, taskId]
-    );
-    await saveDb(db);
-    await updateTask(taskId, bot, db);
-    ctx.session.awaitingEdit = null;
-    ctx.reply(`Task ${taskId} updated successfully.`);
-  } catch (err) {
-    console.error('❌ Error in edit submit:', err);
-    await ctx.reply('Error updating task.');
   }
 }

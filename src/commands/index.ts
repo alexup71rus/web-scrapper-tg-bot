@@ -1,6 +1,6 @@
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
-import {BotContext, TaskConfig, TaskDTO} from '../types';
+import { BotContext, TaskConfig, TaskDTO } from '../types';
 import { Database } from 'sql.js';
 import { handleStart } from './start';
 import { handleCreate } from './create';
@@ -11,10 +11,11 @@ import { handlePage } from './actions/page';
 import { handleAction } from './actions/action';
 import { handleConfirmDelete, handleCancelDelete } from './actions/delete';
 import { handleCancelEdit } from './actions/edit';
-import { saveDb, getTasks } from '../services/database';
+import { saveDb, getTasks, getTaskById } from '../services/database';
 import { isValidTaskDTO, isValidTaskConfigForEdit } from '../utils/validation';
 import { getTaskListKeyboard } from '../keyboard';
 import * as cron from 'node-cron';
+import { updateTask } from '../scheduler';
 
 export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promise<Database>) {
   const db = await dbPromise;
@@ -87,7 +88,14 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
           stmt.run();
           stmt.free();
           await saveDb(db);
-          await ctx.reply(`Task "${taskConfig.name}" updated successfully! Use /list to view all tasks.`);
+          const task = await getTaskById(db, ctx.session.awaitingEdit);
+          if (task && task.duration && cron.validate(task.duration)) {
+            await updateTask(ctx.session.awaitingEdit, bot, db);
+            await ctx.reply(`Task "${taskConfig.name}" updated successfully! Use /list to view all tasks.`);
+          } else {
+            await ctx.reply(`Task "${taskConfig.name}" updated in database, but failed to schedule due to invalid cron expression.`);
+            console.error(`Failed to schedule task ${ctx.session.awaitingEdit}: Invalid cron or task not found`);
+          }
           ctx.session.awaitingEdit = null;
           const tasks = await getTasks(db);
           await ctx.telegram.editMessageText(

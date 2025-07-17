@@ -12,7 +12,6 @@ async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>): Promise
   try {
     const tags = task.tags.split(',').map(tag => tag.trim());
     const content = await parseSite(task.url, tags);
-    console.log(`Task "${task.name}" parsed content: ${content}`);
     if (content.startsWith('Error')) {
       console.log(`Task ${task.name} failed: ${content}`);
       return `Task "${task.name}" failed: ${content}`;
@@ -22,7 +21,7 @@ async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>): Promise
       console.log(`Task ${task.name} failed in Ollama: ${result}`);
       return `Task "${task.name}" failed in Ollama: ${result}`;
     }
-    console.log(`Task ${task.name} completed successfully`);
+
     return `Task "${task.name}" result:\n${result}`;
   } catch (err) {
     console.log(`Task ${task.name} error: ${(err as Error).message}`);

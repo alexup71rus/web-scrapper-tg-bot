@@ -5,8 +5,14 @@ import { isValidTaskConfig } from '../utils/validation';
 
 export async function saveDb(db: Database) {
   try {
+    const tableCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'");
+    if (!tableCheck[0]?.values.length) {
+      console.error('❌ No tasks table found, skipping save');
+      return;
+    }
     const data = db.export();
     await fs.writeFile('./tasks.db', Buffer.from(data));
+    console.log('Database saved successfully');
   } catch (err) {
     console.error('❌ Error saving database:', err);
   }

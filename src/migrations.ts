@@ -16,7 +16,9 @@ export async function initDb(): Promise<Database> {
     console.log('Created new in-memory database');
   }
 
-  const migrationsDir = path.resolve('./src/migrations');
+  const isBuilt = __dirname.includes('/dist') || __dirname.includes('\\dist');
+  const migrationsDir = path.resolve(isBuilt ? './dist/migrations' : './src/migrations');
+
   try {
     await fs.mkdir(migrationsDir, { recursive: true });
   } catch (err) {
@@ -25,17 +27,19 @@ export async function initDb(): Promise<Database> {
   }
 
   try {
-    const migrationFiles = await fs.readdir(migrationsDir).catch(() => []);
-    const tsFiles = migrationFiles.filter(file => file.endsWith('.ts')).sort();
+    const migrationFiles = (await fs.readdir(migrationsDir)).filter(file =>
+      isBuilt ? file.endsWith('.js') : file.endsWith('.ts')
+    ).sort();
 
-    if (tsFiles.length === 0) {
+    if (migrationFiles.length === 0) {
       console.warn('⚠️ No migration files found in migrations directory');
     }
 
-    for (const file of tsFiles) {
+    for (const file of migrationFiles) {
       try {
         const migrationPath = path.join(migrationsDir, file);
-        const { up } = await import(migrationPath);
+        const module = require(migrationPath);
+        const { up } = module;
         console.log(`Applying migration: ${file}`);
         await up(db);
         console.log(`Migration ${file} applied successfully`);

@@ -1,0 +1,25 @@
+name: Deploy to Windows Server
+on:
+  push:
+    branches: [ main ]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install SSH client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+      - name: Set up SSH
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          echo "Host server" >> ssh_config
+          echo "  HostName ${{ secrets.SERVER_IP }}" >> ssh_config
+          echo "  User ${{ secrets.SERVER_USER }}" >> ssh_config
+          echo "  PasswordAuthentication yes" >> ssh_config
+          echo "  IdentityFile private_key" >> ssh_config
+      - name: Deploy to server
+        run: |
+          sshpass -p "${{ secrets.SSH_PASSWORD }}" ssh -F ssh_config server "cd /c/Projects/web-scrapper-tg-bot && git pull && pnpm install && pnpm build && pm2 restart web-scrapper-bot"

@@ -16,7 +16,7 @@ export async function initDb(): Promise<Database> {
     console.log('Created new in-memory database');
   }
 
-  const migrationsDir = path.resolve('./migrations');
+  const migrationsDir = path.resolve('./src/migrations');
   try {
     await fs.mkdir(migrationsDir, { recursive: true });
   } catch (err) {

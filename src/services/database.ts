@@ -1,6 +1,6 @@
 import { Database } from 'sql.js';
 import * as fs from 'fs/promises';
-import { TaskConfig } from '../types';
+import { TaskDTO } from '../types';
 import { isValidTaskConfig } from '../utils/validation';
 
 export async function saveDb(db: Database) {
@@ -18,13 +18,13 @@ export async function saveDb(db: Database) {
   }
 }
 
-export async function getTasks(db: Database): Promise<TaskConfig[]> {
-  const stmt = db.prepare('SELECT * FROM tasks');
-  const tasks: TaskConfig[] = [];
+export async function getTasks(db: Database): Promise<TaskDTO[]> {
+  const stmt = db.prepare('SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId FROM tasks');
+  const tasks: TaskDTO[] = [];
   while (stmt.step()) {
     const row = stmt.getAsObject() as unknown;
     if (isValidTaskConfig(row)) {
-      tasks.push(row as TaskConfig);
+      tasks.push(row as TaskDTO);
     } else {
       console.error('❌ Invalid task data:', row);
     }
@@ -33,10 +33,10 @@ export async function getTasks(db: Database): Promise<TaskConfig[]> {
   return tasks;
 }
 
-export async function getTaskById(db: Database, id: number): Promise<TaskConfig | null> {
-  const stmt = db.prepare('SELECT * FROM tasks WHERE id = ?');
+export async function getTaskById(db: Database, id: number): Promise<TaskDTO | null> {
+  const stmt = db.prepare('SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId FROM tasks WHERE id = ?');
   stmt.bind([id]);
   const task = stmt.step() ? stmt.getAsObject() as unknown : null;
   stmt.free();
-  return task && isValidTaskConfig(task) ? (task as TaskConfig) : null;
+  return task && isValidTaskConfig(task) ? (task as TaskDTO) : null;
 }

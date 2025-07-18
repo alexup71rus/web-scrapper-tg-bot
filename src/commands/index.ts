@@ -12,14 +12,12 @@ import { handleAction } from './actions/action';
 import { handleConfirmDelete, handleCancelDelete } from './actions/delete';
 import { handleCancelEdit } from './actions/edit';
 import { saveDb, getTasks, getTaskById } from '../services/database';
-import { isValidTaskDTO, isValidTaskConfigForEdit } from '../utils/validation';
+import { isValidTaskDTO, isValidTaskConfigForEdit, parseKeyValueConfig, convertScheduleToCron, isValidUrl } from '../utils/validation';
 import { getTaskListKeyboard } from '../keyboard';
 import * as cron from 'node-cron';
 import { scheduleTasks } from '../scheduler';
 
-export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promise<Database>) {
-  const db = await dbPromise;
-
+export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
   const tableExists = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'");
   if (!tableExists[0]?.values.length) {
     throw new Error('Table "tasks" not found. Run migrations first.');
@@ -42,92 +40,165 @@ export async function setupCommands(bot: Telegraf<BotContext>, dbPromise: Promis
         await ctx.reply('Error: Chat ID not found.');
         return;
       }
-      if (ctx.session.awaitingCreate) {
-        const config: Partial<TaskDTO> = JSON.parse(ctx.message.text);
-        const taskConfig = { ...config, chatId: ctx.chat.id };
-        if (!isValidTaskDTO(taskConfig) || !cron.validate(taskConfig.duration)) {
-          await ctx.reply('Invalid JSON format or cron expression. Check all required fields.');
+
+      // Проверяем, является ли сообщение конфигурацией ключ-значение
+      const config = parseKeyValueConfig(ctx.message.text);
+      const isConfigFormat = Object.keys(config).length > 0; // Проверяем, что парсинг вернул непустой объект
+      if (!isConfigFormat) {
+        if (ctx.session.awaitingCreate || ctx.session.awaitingEdit) {
+          await ctx.reply('Invalid configuration format. Please send a valid key-value config.');
+        }
+        return;
+      }
+
+      const taskConfig: Partial<TaskDTO> = {
+        ...config,
+        chatId: ctx.chat.id.toString(),
+        schedule: config.schedule ? convertScheduleToCron(config.schedule) : undefined,
+        raw_schedule: config.schedule,
+      };
+
+      // Validate required fields and types
+      if (taskConfig.id && isNaN(Number(taskConfig.id))) {
+        await ctx.reply('Invalid id. Must be a number.');
+        return;
+      }
+      if (!taskConfig.name) {
+        await ctx.reply('Missing name. Must be a string.');
+        return;
+      }
+      if (!taskConfig.url || !isValidUrl(taskConfig.url)) {
+        await ctx.reply('Invalid or missing URL. Must be a valid URL (e.g., https://example.com).');
+        return;
+      }
+      if (!taskConfig.prompt || !taskConfig.prompt.includes('{content}')) {
+        await ctx.reply('Invalid or missing prompt. Must include {content}.');
+        return;
+      }
+      if (!taskConfig.schedule || !cron.validate(taskConfig.schedule)) {
+        await ctx.reply('Invalid or missing schedule. Use "daily HH:MM" or a valid cron expression.');
+        return;
+      }
+      if (taskConfig.alert_if_true && !['yes', 'no'].includes(taskConfig.alert_if_true)) {
+        await ctx.reply('Invalid alert_if_true. Must be "yes" or "no".');
+        return;
+      }
+      if (!taskConfig.chatId) {
+        await ctx.reply('Invalid chatId. Must be a string.');
+        return;
+      }
+
+      if (!taskConfig.id && !ctx.session.awaitingEdit) {
+        // Creating a new task
+        if (!isValidTaskDTO({ ...taskConfig, id: 0 })) { // Temporary id for validation
+          await ctx.reply('Invalid task configuration. All fields except id are required.');
+          console.log('Validation failed for taskConfig:', taskConfig);
           return;
         }
+        // Generate a unique id
+        const maxIdStmt = db.prepare('SELECT MAX(id) as maxId FROM tasks');
+        maxIdStmt.step();
+        const maxIdResult = maxIdStmt.getAsObject();
+        const newId = maxIdResult.maxId ? Number(maxIdResult.maxId) + 1 : 1;
+        maxIdStmt.free();
+
+        console.log('Inserting task with config:', { ...taskConfig, id: newId });
+
         const stmt = db.prepare(
-          'INSERT INTO tasks (name, ollama_host, model, prompt, duration, tags, url, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          'INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
         );
-        stmt.bind([taskConfig.name, taskConfig.ollama_host, taskConfig.model, taskConfig.prompt, taskConfig.duration, taskConfig.tags, taskConfig.url, taskConfig.chatId]);
+        stmt.bind([
+          newId,
+          taskConfig.name,
+          taskConfig.url,
+          taskConfig.tags || 'body',
+          taskConfig.schedule,
+          taskConfig.raw_schedule || taskConfig.schedule,
+          taskConfig.alert_if_true || 'no',
+          taskConfig.prompt,
+          taskConfig.chatId,
+        ]);
         stmt.run();
         stmt.free();
         await saveDb(db);
+
+        console.log('Database saved, fetching tasks...');
         const tasks = await getTasks(db);
-        const newTask = tasks.find(t => t.name === taskConfig.name && t.chatId === taskConfig.chatId);
-        if (newTask && newTask.duration && cron.validate(newTask.duration)) {
+        console.log('Tasks after insert:', tasks);
+
+        const newTask = tasks.find(t => t.id === newId && t.chatId === taskConfig.chatId);
+        if (newTask && newTask.schedule && cron.validate(newTask.schedule)) {
           await scheduleTasks(bot, db);
-          await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
+          await ctx.reply(`Task "${taskConfig.name}" added successfully with ID ${newId}! Use /list to view all tasks.`);
         } else {
-          await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled due to invalid cron expression.`);
-          console.error(`Failed to schedule new task ${taskConfig.name}: Invalid cron or task not found`);
+          await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled or not found.`);
+          console.error(`Failed to schedule or find new task ${taskConfig.name}:`, newTask);
         }
-        ctx.session.awaitingCreate = false;
-      } else if (ctx.session.awaitingEdit) {
-        const config: Partial<TaskConfig> = JSON.parse(ctx.message.text);
-        if (typeof config.id !== 'number' || config.id !== ctx.session.awaitingEdit) {
-          const taskConfig = { ...config, chatId: ctx.chat.id };
-          if (!isValidTaskDTO(taskConfig) || !cron.validate(taskConfig.duration)) {
-            await ctx.reply('Invalid JSON format or cron expression. Check all required fields.');
-            return;
-          }
-          const stmt = db.prepare(
-            'INSERT INTO tasks (name, ollama_host, model, prompt, duration, tags, url, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-          );
-          stmt.bind([taskConfig.name, taskConfig.ollama_host, taskConfig.model, taskConfig.prompt, taskConfig.duration, taskConfig.tags, taskConfig.url, taskConfig.chatId]);
-          stmt.run();
-          stmt.free();
-          await saveDb(db);
-          const tasks = await getTasks(db);
-          const newTask = tasks.find(t => t.name === taskConfig.name && t.chatId === taskConfig.chatId);
-          if (newTask && newTask.duration && cron.validate(newTask.duration)) {
-            await scheduleTasks(bot, db);
-            await ctx.reply(`Task "${taskConfig.name}" added successfully! Use /list to view all tasks.`);
-          } else {
-            await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled due to invalid cron expression.`);
-            console.error(`Failed to schedule new task ${taskConfig.name}: Invalid cron or task not found`);
-          }
-          ctx.session.awaitingEdit = null;
+      } else {
+        // Editing a task
+        if (!taskConfig.id) {
+          await ctx.reply('Missing id for editing task.');
+          return;
+        }
+        const existingTask = await getTaskById(db, taskConfig.id);
+        if (!existingTask) {
+          await ctx.reply(`Task with ID ${taskConfig.id} not found.`);
+          return;
+        }
+        if (!isValidTaskConfigForEdit(taskConfig)) {
+          await ctx.reply('Invalid task configuration for edit. Check all provided fields.');
+          return;
+        }
+        console.log('Updating task with config:', taskConfig);
+        const stmt = db.prepare(
+          'UPDATE tasks SET name = ?, url = ?, tags = ?, schedule = ?, raw_schedule = ?, alert_if_true = ?, prompt = ?, chatId = ? WHERE id = ?'
+        );
+        stmt.bind([
+          taskConfig.name,
+          taskConfig.url,
+          taskConfig.tags || 'body',
+          taskConfig.schedule,
+          taskConfig.raw_schedule || taskConfig.schedule,
+          taskConfig.alert_if_true || 'no',
+          taskConfig.prompt,
+          taskConfig.chatId,
+          taskConfig.id,
+        ]);
+        stmt.run();
+        stmt.free();
+        await saveDb(db);
+
+        console.log('Database saved, fetching updated task...');
+        const task = await getTaskById(db, taskConfig.id);
+        console.log('Updated task:', task);
+
+        if (task && task.schedule && cron.validate(task.schedule)) {
+          await scheduleTasks(bot, db);
+          await ctx.reply(`Task "${taskConfig.name}" updated successfully! Use /list to view all tasks.`);
         } else {
-          const taskConfig = { ...config, chatId: ctx.chat.id };
-          if (!isValidTaskConfigForEdit(taskConfig) || !cron.validate(taskConfig.duration)) {
-            await ctx.reply('Invalid JSON format or cron expression. Check all required fields.');
-            return;
-          }
-          const stmt = db.prepare(
-            'UPDATE tasks SET name = ?, ollama_host = ?, model = ?, prompt = ?, duration = ?, tags = ?, url = ?, chatId = ? WHERE id = ?'
-          );
-          stmt.bind([taskConfig.name, taskConfig.ollama_host, taskConfig.model, taskConfig.prompt, taskConfig.duration, taskConfig.tags, taskConfig.url, taskConfig.chatId, ctx.session.awaitingEdit]);
-          stmt.run();
-          stmt.free();
-          await saveDb(db);
-          const task = await getTaskById(db, ctx.session.awaitingEdit);
-          if (task && task.duration && cron.validate(task.duration)) {
-            await scheduleTasks(bot, db);
-            await ctx.reply(`Task "${taskConfig.name}" updated successfully! Use /list to view all tasks.`);
-          } else {
-            await ctx.reply(`Task "${taskConfig.name}" updated in database but not scheduled due to invalid cron expression.`);
-            console.error(`Failed to schedule task ${ctx.session.awaitingEdit}: Invalid cron or task not found`);
-          }
-          ctx.session.awaitingEdit = null;
-          const tasks = await getTasks(db);
-          await ctx.telegram.editMessageText(
-            ctx.chat.id,
-            ctx.session.listMessageId,
-            undefined,
-            'Tasks:',
-            getTaskListKeyboard(tasks, 1)
-          ).catch(async () => {
-            const message = await ctx.reply('Tasks:', getTaskListKeyboard(tasks, 1));
-            ctx.session.listMessageId = message.message_id;
-          });
+          await ctx.reply(`Task "${taskConfig.name}" updated in database but not scheduled or not found.`);
+          console.error(`Failed to schedule or find task ${taskConfig.id}:`, task);
         }
       }
+
+      ctx.session.awaitingCreate = false;
+      ctx.session.awaitingEdit = null;
+
+      const tasks = await getTasks(db);
+      console.log('Tasks after operation:', tasks);
+      await ctx.telegram.editMessageText(
+        ctx.chat.id,
+        ctx.session.listMessageId,
+        undefined,
+        'Tasks:',
+        getTaskListKeyboard(tasks, 1)
+      ).catch(async () => {
+        const message = await ctx.reply('Tasks:', getTaskListKeyboard(tasks, 1));
+        ctx.session.listMessageId = message.message_id;
+      });
     } catch (e: any) {
-      await ctx.reply(`Error parsing JSON: ${e.message}`);
+      console.error('Error processing configuration:', e.message);
+      await ctx.reply(`Error processing configuration: ${e.message}`);
     }
   });
 }

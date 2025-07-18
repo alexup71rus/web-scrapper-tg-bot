@@ -22,23 +22,35 @@ export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<
       ctx.session.deleteConfirm = null;
       const task = await getTaskById(db, taskId);
       if (task) {
+        const configText = [
+          `id=${task.id}`,
+          `name=${task.name}`,
+          `url=${task.url}`,
+          task.tags ? `tags=${task.tags}` : 'tags=body',
+          `schedule=${task.raw_schedule || task.schedule}`,
+          `alert_if_true=${task.alert_if_true || 'no'}`,
+          `prompt=${task.prompt}`,
+          `chatId=${task.chatId}`,
+        ].join('\n');
         await ctx.telegram.editMessageText(
           ctx.chat.id,
           ctx.session.listMessageId,
           undefined,
-          'Send updated JSON config for the task (include "id" to update, omit to create new):\n```json\n' +
-          JSON.stringify(task, null, 2) +
+          'Send updated key-value config for the task (include "id" to update):\n```\n' +
+          configText +
           '\n```',
           { parse_mode: 'Markdown', ...getEditTaskKeyboard() }
         ).catch(async () => {
           const message = await ctx.reply(
-            'Send updated JSON config for the task (include "id" to update, omit to create new):\n```json\n' +
-            JSON.stringify(task, null, 2) +
+            'Send updated key-value config for the task (include "id" to update):\n```\n' +
+            configText +
             '\n```',
             { parse_mode: 'Markdown', ...getEditTaskKeyboard() }
           );
           ctx.session.listMessageId = message.message_id;
         });
+      } else {
+        await ctx.reply(`Task with ID ${taskId} not found.`);
       }
       await ctx.answerCbQuery();
     } else if (action === 'delete') {
@@ -64,7 +76,7 @@ export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<
           const message = await ctx.reply(`Executing "${task.name}", please wait...`);
           ctx.session.listMessageId = message.message_id;
         });
-        const result = await executeTask(task, bot);
+        const result = await executeTask(task, bot, true); // Manual execution
         await ctx.telegram.editMessageText(
           ctx.chat.id,
           ctx.session.listMessageId,

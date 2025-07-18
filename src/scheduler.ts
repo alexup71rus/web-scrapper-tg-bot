@@ -8,18 +8,26 @@ import { processWithOllama } from './ollama';
 import { Telegraf } from 'telegraf';
 import { BotContext } from './types';
 
-async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>): Promise<string> {
+async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>, isManual: boolean = false): Promise<string> {
   try {
-    const tags = task.tags.split(',').map(tag => tag.trim());
+    const tags = task.tags ? task.tags.split(',').map(tag => tag.trim()) : ['body'];
     const content = await parseSite(task.url, tags);
     if (content.startsWith('Error')) {
       console.log(`Task ${task.name} failed: ${content}`);
       return `Task "${task.name}" failed: ${content}`;
     }
-    const result = await processWithOllama(task.model, task.prompt, content, task.ollama_host);
+    const result = await processWithOllama(task.prompt, content, task.alert_if_true || 'no');
     if (result.startsWith('Error')) {
       console.log(`Task ${task.name} failed in Ollama: ${result}`);
       return `Task "${task.name}" failed in Ollama: ${result}`;
+    }
+
+    if (task.alert_if_true === 'yes' && !isManual) {
+      const parsedResult = JSON.parse(result);
+      if (parsedResult.is_show !== true) {
+        return ''; // Suppress message for automatic execution if is_show is not true
+      }
+      return `Task "${task.name}" result:\n${parsedResult.details}`;
     }
 
     return `Task "${task.name}" result:\n${result}`;
@@ -39,10 +47,12 @@ export async function scheduleTasks(bot: Telegraf<BotContext>, db: Database) {
 
   const tasks = await getTasks(db);
   for (const task of tasks) {
-    if (task.duration && cron.validate(task.duration) && task.id !== undefined) {
-      const scheduledTask = cron.schedule(task.duration, async () => {
-        const result = await executeTask(task, bot);
-        await bot.telegram.sendMessage(task.chatId, result);
+    if (task.schedule && cron.validate(task.schedule) && task.id !== undefined) {
+      const scheduledTask = cron.schedule(task.schedule, async () => {
+        const result = await executeTask(task, bot, false); // Automatic execution
+        if (result) {
+          await bot.telegram.sendMessage(task.chatId, result);
+        }
       });
       scheduledTasks.set(task.id, scheduledTask);
     } else {

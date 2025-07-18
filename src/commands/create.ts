@@ -5,21 +5,14 @@ export async function handleCreate(ctx: BotContext) {
   ctx.session.awaitingEdit = null;
   ctx.session.deleteConfirm = null;
   await ctx.reply(
-    'Send JSON config for the task:\n```json\n' +
-    JSON.stringify(
-      {
-        name: '#NAME#',
-        ollama_host: 'http://localhost:11434',
-        model: 'llama3',
-        prompt: 'Summarize this content: {content}',
-        duration: '* * * * *',
-        tags: 'body > div,!.promo',
-        url: 'https://example.com',
-      },
-      null,
-      2
-    ) +
-    '\n```',
+    'Send key-value config for the task (omit "id" for creation, include "id" for editing):\n```\n' +
+    'name=MyTask\n' +
+    'url=https://example.com\n' +
+    'tags=.discount\n' +
+    'schedule=daily 10:00\n' +
+    'alert_if_true=yes\n' +
+    'prompt=Are there any discounts? Data: {content}\n' +
+    '```',
     { parse_mode: 'Markdown' }
   );
 }

@@ -24,44 +24,52 @@ export async function up(db: Database): Promise<void> {
     stmt.free();
   }
 
-  if (!tableExists[0]?.values.length) {
-    db.run(`
-      CREATE TABLE tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE,
-        ollama_host TEXT,
-        model TEXT,
-        prompt TEXT,
-        duration TEXT,
-        tags TEXT,
-        url TEXT,
-        chatId INTEGER
-      )
-    `);
-  } else {
-    const columns = db.exec("PRAGMA table_info(tasks)");
-    const hasChatId = columns[0]?.values.some((col: any) => col[1] === 'chatId');
-    if (!hasChatId) {
-      db.run('ALTER TABLE tasks ADD COLUMN chatId INTEGER');
-    }
+  // Drop the existing tasks table if it exists to avoid column conflicts
+  if (tableExists[0]?.values.length) {
+    db.run('DROP TABLE tasks');
   }
 
-  if (existingData.length > 0 && !tableExists[0]?.values.length) {
+  // Create the new tasks table with updated schema
+  db.run(`
+    CREATE TABLE tasks (
+      id INTEGER UNIQUE,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      tags TEXT DEFAULT 'body',
+      schedule TEXT NOT NULL,
+      raw_schedule TEXT,
+      alert_if_true TEXT DEFAULT 'no',
+      prompt TEXT NOT NULL,
+      chatId TEXT NOT NULL
+    )
+  `);
+
+  // Migrate existing data to the new schema (only compatible fields)
+  if (existingData.length > 0) {
     const stmt = db.prepare(
-      'INSERT INTO tasks (id, name, ollama_host, model, prompt, duration, tags, url, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+      'INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
     );
     for (const row of existingData) {
-      stmt.run([
-        row.id,
-        row.name,
-        row.ollama_host,
-        row.model,
-        row.prompt,
-        row.duration,
-        row.tags,
-        row.url,
-        row.chatId
-      ]);
+      // Map old fields to new schema, skip incompatible fields
+      const name = row.name || `Task_${row.id || 'Unknown'}`; // Fallback for name
+      const schedule = row.duration || row.schedule || '* * * * *'; // Fallback if duration or schedule is missing
+      const raw_schedule = row.duration || null; // Use duration as raw_schedule if available
+      const tags = row.tags || 'body'; // Fallback to default
+      const prompt = row.prompt || 'Summarize this content: {content}'; // Fallback if prompt is missing
+      const chatId = row.chatId ? String(row.chatId) : null; // Convert to string, handle null
+      if (chatId && row.url && row.id) {
+        stmt.run([
+          row.id,
+          name,
+          row.url,
+          tags,
+          schedule,
+          raw_schedule,
+          'no', // Default for alert_if_true
+          prompt,
+          chatId,
+        ]);
+      }
     }
     stmt.free();
   }

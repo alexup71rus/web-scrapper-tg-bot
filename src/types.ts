@@ -1,26 +1,27 @@
 import { Context } from 'telegraf';
 
 export interface TaskConfig {
-  name: string;
-  ollama_host: string;
-  model: string;
-  prompt: string;
-  duration: string;
-  tags: string;
-  url: string;
-  chatId: number;
   id?: number;
+  name: string;
+  url: string;
+  tags?: string;
+  schedule: string;
+  raw_schedule?: string;
+  alert_if_true?: 'yes' | 'no';
+  prompt: string;
+  chatId: string;
 }
 
 export interface TaskDTO {
+  id: number;
   name: string;
-  ollama_host: string;
-  model: string;
-  prompt: string;
-  duration: string;
-  tags: string;
   url: string;
-  chatId: number;
+  tags?: string;
+  schedule: string;
+  raw_schedule?: string;
+  alert_if_true?: 'yes' | 'no';
+  prompt: string;
+  chatId: string;
 }
 
 export interface SessionData {

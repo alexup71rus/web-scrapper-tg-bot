@@ -1,13 +1,24 @@
-import { Ollama } from 'ollama';
+import { GenerateResponse, Ollama } from 'ollama';
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
-export async function processWithOllama(model: string, prompt: string, content: string, ollama_host = 'http://localhost:11434'): Promise<string> {
+const ResponseSchema = z.object({
+  is_show: z.boolean(),
+  details: z.string(),
+});
+
+export async function processWithOllama(prompt: string, content: string, alert_if_true: 'yes' | 'no' = 'no'): Promise<string> {
   try {
-    if (typeof model !== 'string' || !model.trim()) throw new Error('Model must be a non-empty string');
     if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('Prompt must be a non-empty string');
     if (typeof content !== 'string') throw new Error('Content must be a string');
     if (!prompt.includes('{content}')) throw new Error('Prompt must include {content}');
-    if (!/https?:\/\/.+/.test(ollama_host)) throw new Error('Invalid ollama_host URL');
-    const client = new Ollama({ host: ollama_host });
+
+    const ollamaHost = process.env.OLLAMA_HOST || 'http://localhost:11434';
+    const model = process.env.OLLAMA_MODEL || 'llama3';
+
+    if (!/https?:\/\/.+/.test(ollamaHost)) throw new Error('Invalid ollama_host URL');
+
+    const client = new Ollama({ host: ollamaHost });
 
     try {
       await client.list();
@@ -15,15 +26,34 @@ export async function processWithOllama(model: string, prompt: string, content: 
       throw new Error(`Ollama server is not reachable: ${(err as Error).message}`);
     }
 
-    const response = await client.generate({
+    const finalPrompt = prompt.replace('{content}', content);
+    const options: any = {
       model,
-      prompt: prompt.replace('{content}', content),
-      stream: false
-    });
+      prompt: finalPrompt,
+      stream: false,
+    };
 
-    return response.response;
+    // Enforce JSON schema for structured output when alert_if_true is 'yes'
+    if (alert_if_true === 'yes') {
+      options.format = zodToJsonSchema(ResponseSchema);
+    }
+
+    const response: unknown = await client.generate(options);
+
+    const result = (response as GenerateResponse).response;
+
+    if (alert_if_true === 'yes') {
+      try {
+        const parsed = ResponseSchema.parse(JSON.parse(result));
+        return JSON.stringify(parsed); // Return JSON string
+      } catch (err) {
+        throw new Error(`Invalid JSON response: ${(err as Error).message}`);
+      }
+    }
+
+    return result;
   } catch (err) {
     console.log(`Ollama error: ${(err as Error).message}`);
-    return 'Error processing with Ollama';
+    return `Error processing with Ollama: ${(err as Error).message}`;
   }
 }

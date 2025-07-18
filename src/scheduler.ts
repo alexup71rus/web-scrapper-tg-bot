@@ -7,18 +7,19 @@ import { parseSite } from './parser';
 import { processWithOllama } from './ollama';
 import { Telegraf } from 'telegraf';
 import { BotContext } from './types';
+import { Logger } from './utils/logger';
 
+// Executes a task by parsing site content and processing it with Ollama
 async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>, isManual: boolean = false): Promise<string> {
+  const context = { module: 'Scheduler', taskId: task.id, chatId: task.chatId, url: task.url };
   try {
     const tags = task.tags ? task.tags.split(',').map(tag => tag.trim()) : ['body'];
-    const content = await parseSite(task.url, tags);
+    const content = await parseSite(task.url, tags, 2, 2000, task.chatId, task.id);
     if (content.startsWith('Error')) {
-      console.log(`Task ${task.name} failed: ${content}`);
       return `Task "${task.name}" failed: ${content}`;
     }
-    const result = await processWithOllama(task.prompt, content, task.alert_if_true || 'no');
+    const result = await processWithOllama(task.prompt, content, task.alert_if_true || 'no', task.chatId);
     if (result.startsWith('Error')) {
-      console.log(`Task ${task.name} failed in Ollama: ${result}`);
       return `Task "${task.name}" failed in Ollama: ${result}`;
     }
 
@@ -32,32 +33,49 @@ async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>, isManual
 
     return `Task "${task.name}" result:\n${result}`;
   } catch (err) {
-    console.log(`Task ${task.name} error: ${(err as Error).message}`);
+    Logger.error(context, `Task "${task.name}" error: ${(err as Error).message}`, err);
     return `Task "${task.name}" error: ${(err as Error).message}`;
   }
 }
 
 const scheduledTasks: Map<number, ScheduledTask> = new Map();
 
+// Schedules tasks from the database using cron expressions
 export async function scheduleTasks(bot: Telegraf<BotContext>, db: Database) {
-  scheduledTasks.forEach((task, id) => {
-    task.stop();
-    scheduledTasks.delete(id);
-  });
+  const context = { module: 'Scheduler' };
+  try {
+    scheduledTasks.forEach((task, id) => {
+      task.stop();
+      scheduledTasks.delete(id);
+    });
 
-  const tasks = await getTasks(db);
-  for (const task of tasks) {
-    if (task.schedule && cron.validate(task.schedule) && task.id !== undefined) {
-      const scheduledTask = cron.schedule(task.schedule, async () => {
-        const result = await executeTask(task, bot, false); // Automatic execution
-        if (result) {
-          await bot.telegram.sendMessage(task.chatId, result);
-        }
-      });
-      scheduledTasks.set(task.id, scheduledTask);
-    } else {
-      console.error(`Failed to schedule task ${task.name || 'unknown'}: Invalid cron or task ID`);
+    const tasks = await getTasks(db);
+    for (const task of tasks) {
+      if (task.schedule && cron.validate(task.schedule) && task.id !== undefined) {
+        const scheduledTask = cron.schedule(task.schedule, async () => {
+          try {
+            const result = await executeTask(task, bot, false);
+            if (result) {
+              await bot.telegram.sendMessage(task.chatId, result);
+            }
+          } catch (err) {
+            Logger.error(
+              { module: 'Scheduler', taskId: task.id, chatId: task.chatId },
+              `Scheduled task "${task.name}" execution failed: ${(err as Error).message}`,
+              err
+            );
+          }
+        });
+        scheduledTasks.set(task.id, scheduledTask);
+      } else {
+        Logger.error(
+          { module: 'Scheduler', taskId: task.id, chatId: task.chatId },
+          `Failed to schedule task "${task.name || 'unknown'}": Invalid cron expression or task ID`
+        );
+      }
     }
+  } catch (err) {
+    Logger.error(context, 'Error scheduling tasks', err);
   }
 }
 

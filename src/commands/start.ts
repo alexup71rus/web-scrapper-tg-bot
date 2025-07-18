@@ -1,5 +1,6 @@
 import { BotContext } from '../types';
 
+// Handles /start command to initialize bot interaction
 export async function handleStart(ctx: BotContext) {
   ctx.session.awaitingCreate = false;
   ctx.session.awaitingEdit = null;

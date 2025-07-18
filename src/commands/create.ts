@@ -1,5 +1,6 @@
 import { BotContext } from '../types';
 
+// Initiates task creation process
 export async function handleCreate(ctx: BotContext) {
   ctx.session.awaitingCreate = true;
   ctx.session.awaitingEdit = null;

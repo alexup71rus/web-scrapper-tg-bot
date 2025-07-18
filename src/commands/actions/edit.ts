@@ -2,8 +2,11 @@ import { BotContext, TaskConfig } from '../../types';
 import { Database } from 'sql.js';
 import { getTaskById } from '../../services/database';
 import { getTaskActionsKeyboard } from '../../keyboard';
+import { Logger } from '../../utils/logger';
 
+// Handles cancellation of task editing
 export async function handleCancelEdit(ctx: BotContext, db: Database) {
+  const context = { module: 'Edit', taskId: ctx.session.awaitingEdit, chatId: ctx.chat?.id?.toString() };
   try {
     const taskId = ctx.session.awaitingEdit;
     if (taskId) {
@@ -24,7 +27,7 @@ export async function handleCancelEdit(ctx: BotContext, db: Database) {
     }
     await ctx.answerCbQuery();
   } catch (err) {
-    console.error('❌ Error in cancel_edit action:', err);
+    Logger.error(context, 'Error in cancel_edit action', err);
     await ctx.reply('Error cancelling edit.');
   }
 }

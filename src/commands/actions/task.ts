@@ -2,13 +2,18 @@ import { BotContext, TaskConfig } from '../../types';
 import { Database } from 'sql.js';
 import { getTaskById } from '../../services/database';
 import { getTaskActionsKeyboard } from '../../keyboard';
+import { Logger } from '../../utils/logger'; // Add Logger import
 
+// Handles task selection action
 export async function handleTask(ctx: BotContext, db: Database) {
+  const context = { module: 'Task', taskId: ctx.match?.[1], chatId: ctx.chat?.id?.toString() };
   try {
     if (!ctx.match) {
+      Logger.error(context, 'No match data for task action');
       throw new Error('No match data for task action');
     }
     if (!ctx.chat?.id) {
+      Logger.error(context, 'Chat ID not found');
       throw new Error('Chat ID not found');
     }
     const taskId = parseInt(ctx.match[1]);
@@ -24,10 +29,12 @@ export async function handleTask(ctx: BotContext, db: Database) {
         const message = await ctx.reply(`Task: ${task.name}`, getTaskActionsKeyboard(taskId));
         ctx.session.listMessageId = message.message_id;
       });
+    } else {
+      await ctx.reply(`Task with ID ${taskId} not found.`);
     }
     await ctx.answerCbQuery();
   } catch (err) {
-    console.error('❌ Error in task action:', err);
+    Logger.error(context, 'Error in task action', err);
     await ctx.reply('Error processing task action.');
   }
 }

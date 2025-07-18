@@ -2,8 +2,11 @@ import { BotContext } from '../../types';
 import { Database } from 'sql.js';
 import { getTasks } from '../../services/database';
 import { getTaskListKeyboard } from '../../keyboard';
+import { Logger } from '../../utils/logger';
 
+// Handles back_to_list action to display task list
 export async function handleBackToList(ctx: BotContext, db: Database) {
+  const context = { module: 'BackToList', chatId: ctx.chat?.id?.toString() };
   try {
     const tasks = await getTasks(db);
     await ctx.telegram.editMessageText(
@@ -18,7 +21,7 @@ export async function handleBackToList(ctx: BotContext, db: Database) {
     });
     await ctx.answerCbQuery();
   } catch (err) {
-    console.error('❌ Error in back_to_list action:', err);
+    Logger.error(context, 'Error in back_to_list action', err);
     await ctx.reply('Error returning to task list.');
   }
 }

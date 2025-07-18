@@ -1,3 +1,4 @@
+import path from 'path';
 import { Telegraf } from 'telegraf';
 import * as dotenv from 'dotenv';
 import LocalSession from 'telegraf-session-local';
@@ -6,32 +7,37 @@ import { BotContext } from './types';
 import { initDb } from './migrations';
 import { scheduleTasks } from './scheduler';
 import { saveDb } from './services/database';
+import { Logger } from './utils/logger';
 
-dotenv.config();
+dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 
+// Validate environment variables
 const token = process.env.BOT_TOKEN;
-const ollamaHost = process.env.OLLAMA_HOST;
-const ollamaModel = process.env.OLLAMA_MODEL;
+const ollamaHost = process.env.CUSTOM_OLLAMA_HOST;
+const ollamaModel = process.env.CUSTOM_OLLAMA_MODEL;
 
 if (!token) {
-  console.error('❌ BOT_TOKEN missing');
+  Logger.error({ module: 'Index' }, 'Missing BOT_TOKEN environment variable');
   process.exit(1);
 }
 if (!ollamaHost) {
-  console.error('❌ OLLAMA_HOST missing');
+  Logger.error({ module: 'Index' }, 'Missing CUSTOM_OLLAMA_HOST environment variable');
   process.exit(1);
 }
 if (!ollamaModel) {
-  console.error('❌ OLLAMA_MODEL missing');
+  Logger.error({ module: 'Index' }, 'Missing CUSTOM_OLLAMA_MODEL environment variable');
   process.exit(1);
 }
 
 const bot = new Telegraf<BotContext>(token);
 
+Logger.initialize(bot);
+
 bot.use(new LocalSession().middleware());
 
 const dbPromise = initDb();
 
+// Initializes and starts the Telegram bot
 async function startBot() {
   try {
     const db = await dbPromise;
@@ -43,27 +49,36 @@ async function startBot() {
     ]);
     await scheduleTasks(bot, db);
     await bot.launch({ dropPendingUpdates: true });
-    console.log('✅ Bot started successfully');
   } catch (err) {
-    console.error('❌ Error starting bot:', err);
+    Logger.error({ module: 'Index' }, 'Failed to start bot', err);
     process.exit(1);
   }
 }
 
 startBot();
 
+// Handles SIGINT signal for graceful shutdown
 process.once('SIGINT', async () => {
-  console.log('Received SIGINT, shutting down...');
-  bot.stop('SIGINT');
-  const db = await dbPromise;
-  await saveDb(db);
-  setTimeout(() => process.exit(0), 1000);
+  try {
+    const db = await dbPromise;
+    await saveDb(db);
+    bot.stop('SIGINT');
+    setTimeout(() => process.exit(0), 1000);
+  } catch (err) {
+    Logger.error({ module: 'Index' }, 'Error during SIGINT shutdown', err);
+    process.exit(1);
+  }
 });
 
+// Handles SIGTERM signal for graceful shutdown
 process.once('SIGTERM', async () => {
-  console.log('Received SIGTERM, shutting down...');
-  bot.stop('SIGTERM');
-  const db = await dbPromise;
-  await saveDb(db);
-  setTimeout(() => process.exit(0), 1000);
+  try {
+    const db = await dbPromise;
+    await saveDb(db);
+    bot.stop('SIGTERM');
+    setTimeout(() => process.exit(0), 1000);
+  } catch (err) {
+    Logger.error({ module: 'Index' }, 'Error during SIGTERM shutdown', err);
+    process.exit(1);
+  }
 });

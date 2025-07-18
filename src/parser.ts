@@ -1,8 +1,10 @@
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import { Logger } from './utils/logger';
 
 puppeteer.use(StealthPlugin());
 
+// Validates a CSS selector
 function validateSelector(sel: string): boolean | string {
   try {
     return document.querySelector(sel) !== null;
@@ -11,6 +13,7 @@ function validateSelector(sel: string): boolean | string {
   }
 }
 
+// Extracts content from elements matching include selectors, excluding specified selectors
 function extractContent(include: string[], exclude: string[]): string {
   const results: string[] = [];
   for (const inc of include) {
@@ -31,17 +34,23 @@ function extractContent(include: string[], exclude: string[]): string {
   return results.join('\n') || '';
 }
 
-export async function parseSite(url: string, tags: string[], retries = 2, retryDelay = 2000): Promise<string> {
+// Parses a website using Puppeteer and extracts content based on tags
+export async function parseSite(url: string, tags: string[], retries = 2, retryDelay = 2000, chatId?: string, taskId?: number): Promise<string> {
+  const context = { module: 'SiteParser', url, chatId, taskId };
   let browser = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
-      if (!url || !/https?:\/\/.+/.test(url)) throw new Error('Invalid URL');
-      if (!tags || !Array.isArray(tags) || tags.length === 0) throw new Error('Tags must be a non-empty array');
+      if (!url || !/https?:\/\/.+/.test(url)) {
+        return 'Error: Invalid URL';
+      }
+      if (!tags || !Array.isArray(tags) || tags.length === 0) {
+        return 'Error: Tags must be a non-empty array';
+      }
 
       browser = await puppeteer.launch({
         headless: true,
         timeout: 30000,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
 
       const page = await browser.newPage();
@@ -57,13 +66,13 @@ export async function parseSite(url: string, tags: string[], retries = 2, retryD
       for (const selector of [...include, ...exclude]) {
         const result = await page.evaluate(validateSelector, selector);
         if (typeof result === 'string' && result.startsWith('Invalid selector error')) {
-          throw new Error(result);
+          return result;
         }
       }
 
       const content = await page.evaluate(extractContent, include, exclude);
       if (typeof content === 'string' && content.startsWith('Error:')) {
-        throw new Error(content);
+        return content;
       }
 
       await browser.close();
@@ -71,17 +80,19 @@ export async function parseSite(url: string, tags: string[], retries = 2, retryD
 
       return content || 'No content found';
     } catch (err) {
-      console.log(`Error parsing ${url} (attempt ${attempt}/${retries}): ${(err as Error).message}`);
+      Logger.error(context, `Failed to parse site (attempt ${attempt}/${retries}): ${(err as Error).message}`, err);
       if (attempt < retries) {
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       } else {
-        return 'Error parsing site';
+        return `Error parsing site: ${(err as Error).message}`;
       }
     } finally {
       if (browser) {
         try {
           await browser.close();
-        } catch {}
+        } catch (closeErr) {
+          Logger.error(context, 'Error closing browser', closeErr);
+        }
         browser = null;
       }
     }

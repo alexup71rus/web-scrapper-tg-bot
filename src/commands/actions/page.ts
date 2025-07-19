@@ -2,7 +2,7 @@ import { BotContext } from '../../types';
 import { Database } from 'sql.js';
 import { getTasks } from '../../services/database';
 import { getTaskListKeyboard } from '../../keyboard';
-import { Logger } from '../../utils/logger'; // Add Logger import
+import { Logger } from '../../utils/logger';
 
 // Handles pagination for task list
 export async function handlePage(ctx: BotContext, db: Database) {

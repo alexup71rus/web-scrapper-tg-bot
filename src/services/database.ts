@@ -4,6 +4,25 @@ import { TaskDTO } from '../types';
 import { TaskValidator } from '../utils/taskValidator';
 import { Logger } from '../utils/logger';
 
+function rowToTask(row: Record<string, unknown>): TaskDTO | null {
+  const task: TaskDTO = {
+    id: Number(row.id),
+    name: String(row.name),
+    url: row.url !== null && row.url !== undefined ? String(row.url) : undefined,
+    tags: row.tags !== null && row.tags !== undefined ? String(row.tags) : undefined,
+    schedule: row.schedule !== null && row.schedule !== undefined ? String(row.schedule) : undefined,
+    raw_schedule: row.raw_schedule !== null && row.raw_schedule !== undefined ? String(row.raw_schedule) : undefined,
+    alert_if_true: row.alert_if_true !== null && row.alert_if_true !== undefined ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
+    prompt: String(row.prompt),
+    chatId: String(row.chatId),
+  };
+  if (TaskValidator.isValidTask(task)) {
+    return task;
+  }
+  Logger.error({ module: 'Database', chatId: task.chatId, taskId: task.id }, `Invalid task data: ${JSON.stringify(task)}`);
+  return null;
+}
+
 export async function saveDb(db: Database): Promise<void> {
   const context = { module: 'Database' };
   try {
@@ -27,22 +46,8 @@ export async function getTasks(db: Database): Promise<TaskDTO[]> {
     const tasks: TaskDTO[] = [];
     while (stmt.step()) {
       const row = stmt.getAsObject() as Record<string, unknown>;
-      const task: TaskDTO = {
-        id: Number(row.id),
-        name: String(row.name),
-        url: row.url !== null && row.url !== undefined ? String(row.url) : undefined,
-        tags: row.tags !== null && row.tags !== undefined ? String(row.tags) : undefined,
-        schedule: row.schedule !== null && row.schedule !== undefined ? String(row.schedule) : undefined,
-        raw_schedule: row.raw_schedule !== null && row.raw_schedule !== undefined ? String(row.raw_schedule) : undefined,
-        alert_if_true: row.alert_if_true !== null && row.alert_if_true !== undefined ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
-        prompt: String(row.prompt),
-        chatId: String(row.chatId),
-      };
-      if (TaskValidator.isValidTaskConfig(task)) {
-        tasks.push(task);
-      } else {
-        Logger.error({ ...context, chatId: task.chatId }, `Invalid task data: ${JSON.stringify(task)}`);
-      }
+      const task = rowToTask(row);
+      if (task) tasks.push(task);
     }
     stmt.free();
     return tasks;
@@ -60,23 +65,9 @@ export async function getTaskById(db: Database, id: number): Promise<TaskDTO | n
     const row = stmt.step() ? stmt.getAsObject() as Record<string, unknown> : null;
     stmt.free();
     if (row) {
-      const task: TaskDTO = {
-        id: Number(row.id),
-        name: String(row.name),
-        url: row.url !== null && row.url !== undefined ? String(row.url) : undefined,
-        tags: row.tags !== null && row.tags !== undefined ? String(row.tags) : undefined,
-        schedule: row.schedule !== null && row.schedule !== undefined ? String(row.schedule) : undefined,
-        raw_schedule: row.raw_schedule !== null && row.raw_schedule !== undefined ? String(row.raw_schedule) : undefined,
-        alert_if_true: row.alert_if_true !== null && row.alert_if_true !== undefined ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
-        prompt: String(row.prompt),
-        chatId: String(row.chatId),
-      };
-      if (TaskValidator.isValidTaskConfig(task)) {
-        return task;
-      } else {
-        Logger.error({ ...context, chatId: task.chatId }, `Task with ID ${id} invalid: ${JSON.stringify(task)}`);
-        return null;
-      }
+      const task = rowToTask(row);
+      if (!task) return null;
+      return task;
     }
     Logger.error(context, `Task with ID ${id} not found`);
     return null;

@@ -4,7 +4,6 @@ import * as path from 'path';
 import { Database } from 'sql.js';
 import { Logger } from './utils/logger';
 
-// Initializes SQLite database, loading from file or creating a new one
 export async function initDb(): Promise<Database> {
   try {
     const SQL = await initSqlJs();
@@ -60,7 +59,6 @@ export async function initDb(): Promise<Database> {
   }
 }
 
-// Applies migrations and saves the database to disk
 export async function runMigrations(): Promise<Database> {
   try {
     const db = await initDb();

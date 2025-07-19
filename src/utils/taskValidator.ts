@@ -67,44 +67,13 @@ export class TaskValidator {
     }
   }
 
-  static isValidTaskConfig(row: unknown): boolean {
-    const context = { module: 'TaskValidator', chatId: (row as any)?.chatId };
-    try {
-      if (!row || typeof row !== 'object') {
-        Logger.error(context, 'Invalid row: not an object or null');
-        return false;
-      }
-      const task = row as Record<string, unknown>;
-      task.id = typeof task.id === 'string' ? Number(task.id) : task.id;
-      const checks = [
-        { condition: typeof task.id !== 'number' || isNaN(task.id), message: `Invalid id: ${task.id}` },
-        { condition: typeof task.name !== 'string' || task.name.trim().length < 1, message: `Invalid name: ${task.name}` },
-        { condition: typeof task.url !== 'string' && task.url !== undefined, message: `Invalid url: ${task.url}` },
-        { condition: typeof task.url === 'string' && !this.isValidUrl(task.url as string), message: `Invalid url format: ${task.url}` },
-        { condition: typeof task.schedule !== 'string' && task.schedule !== undefined, message: `Invalid schedule: ${task.schedule}` },
-        { condition: typeof task.schedule === 'string' && !cron.validate(task.schedule), message: `Invalid schedule format: ${task.schedule}` },
-        { condition: typeof task.prompt !== 'string' || task.prompt.trim().length < 1, message: `Invalid prompt: ${task.prompt}` },
-        { condition: typeof task.chatId !== 'string' || task.chatId.trim() === '', message: `Invalid chatId: ${task.chatId}` },
-        { condition: typeof task.tags !== 'string' && task.tags !== undefined && task.tags !== null, message: `Invalid tags: ${task.tags}` },
-        { condition: typeof task.alert_if_true === 'string' && !['yes', 'no', ''].includes(task.alert_if_true as string), message: `Invalid alert_if_true: ${task.alert_if_true}` },
-        { condition: typeof task.raw_schedule !== 'string' && task.raw_schedule !== undefined && task.raw_schedule !== null, message: `Invalid raw_schedule: ${task.raw_schedule}` },
-      ];
-      for (const check of checks) {
-        if (check.condition) {
-          Logger.error(context, check.message);
-          return false;
-        }
-      }
-      return true;
-    } catch (err) {
-      Logger.error(context, 'Error validating task configuration', err);
-      return false;
-    }
-  }
-
-  static isValidTaskDTO(config: any): boolean {
+  static isValidTask(config: any): boolean {
     const context = { module: 'TaskValidator', chatId: config?.chatId };
     try {
+      if (!config || typeof config !== 'object') {
+        Logger.error(context, 'Invalid config: not an object or null');
+        return false;
+      }
       config.id = typeof config.id === 'string' ? Number(config.id) : config.id;
       const checks = [
         { condition: typeof config.id !== 'number' || isNaN(config.id), message: `Invalid id: ${config.id}` },
@@ -127,7 +96,7 @@ export class TaskValidator {
       }
       return true;
     } catch (err) {
-      Logger.error(context, 'Error validating TaskDTO', err);
+      Logger.error(context, 'Error validating task configuration', err);
       return false;
     }
   }

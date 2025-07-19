@@ -4,7 +4,6 @@ import { Logger } from './utils/logger';
 
 puppeteer.use(StealthPlugin());
 
-// Validates a CSS selector
 function validateSelector(sel: string): boolean | string {
   try {
     return document.querySelector(sel) !== null;
@@ -13,7 +12,6 @@ function validateSelector(sel: string): boolean | string {
   }
 }
 
-// Extracts content from elements matching include selectors, excluding specified selectors
 function extractContent(include: string[], exclude: string[]): string {
   const results: string[] = [];
   for (const inc of include) {
@@ -34,7 +32,6 @@ function extractContent(include: string[], exclude: string[]): string {
   return results.join('\n') || '';
 }
 
-// Parses a website using Puppeteer and extracts content based on tags
 export async function parseSite(url: string | undefined, tags: string[] | undefined, retries = 2, retryDelay = 2000, chatId?: string, taskId?: number): Promise<string> {
   const context = { module: 'SiteParser', url, chatId, taskId };
   let browser = null;

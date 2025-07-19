@@ -8,7 +8,6 @@ const ResponseSchema = z.object({
   details: z.string(),
 });
 
-// Processes prompt and content with Ollama, returns structured or raw response
 export async function processWithOllama(
   prompt: string,
   content: string = '',

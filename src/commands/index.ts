@@ -17,6 +17,25 @@ import { getTaskListKeyboard } from '../keyboard';
 import * as cron from 'node-cron';
 import { scheduleTasks } from '../scheduler';
 import { Logger } from '../utils/logger';
+import {CacheManager} from "../utils/cache";
+
+async function sendOrEditMessage(
+  ctx: BotContext,
+  chatId: number,
+  messageId: number | undefined,
+  text: string,
+  replyMarkup?: any
+) {
+  try {
+    const message = await ctx.telegram.editMessageText(chatId, messageId, undefined, text, replyMarkup);
+    if (typeof message !== 'boolean') ctx.session.listMessageId = message.message_id;
+    return message;
+  } catch {
+    const message = await ctx.reply(text, replyMarkup);
+    ctx.session.listMessageId = message.message_id;
+    return message;
+  }
+}
 
 export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
   try {
@@ -60,42 +79,17 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
           raw_schedule: config.schedule,
         };
 
-        if (taskConfig.id && isNaN(Number(taskConfig.id))) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid id. Must be a number');
-          await ctx.reply('Invalid id. Must be a number.');
-          return;
-        }
-        if (!taskConfig.name || taskConfig.name.trim().length < 1) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Missing or empty name');
-          await ctx.reply('Missing or empty name. Must be a non-empty string.');
-          return;
-        }
-        if (!taskConfig.prompt || taskConfig.prompt.trim().length < 1) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Missing or empty prompt');
-          await ctx.reply('Missing or empty prompt. Must be a non-empty string.');
-          return;
-        }
-        if (taskConfig.url && !TaskValidator.isValidUrl(taskConfig.url)) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid URL');
-          await ctx.reply('Invalid URL. Must be a valid URL (e.g., https://example.com) or omitted.');
-          return;
-        }
-        if (taskConfig.schedule && !cron.validate(taskConfig.schedule)) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid schedule');
-          await ctx.reply('Invalid schedule. Use "daily HH:MM" or a valid cron expression, or omit for manual execution.');
-          return;
-        }
-        if (taskConfig.alert_if_true && !['yes', 'no'].includes(taskConfig.alert_if_true)) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid alert_if_true');
-          await ctx.reply('Invalid alert_if_true. Must be "yes" or "no", or omit.');
+        if (!TaskValidator.isValidTask(taskConfig)) {
+          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid task configuration');
+          await ctx.reply('Invalid task configuration. Check provided fields.');
           return;
         }
 
         if (!taskConfig.id && !ctx.session.awaitingEdit) {
           const validatedConfig: TaskDTO = {
             id: 0, // Temporary, will be assigned
-            name: taskConfig.name,
-            prompt: taskConfig.prompt,
+            name: taskConfig.name!,
+            prompt: taskConfig.prompt!,
             url: taskConfig.url,
             tags: taskConfig.tags,
             schedule: taskConfig.schedule,
@@ -103,11 +97,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             alert_if_true: taskConfig.alert_if_true,
             chatId: taskConfig.chatId!,
           };
-          if (!TaskValidator.isValidTaskDTO(validatedConfig)) {
-            Logger.error({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Validation failed for new task configuration', validatedConfig);
-            await ctx.reply('Invalid task configuration. Check provided fields.');
-            return;
-          }
+
           let newId: number | undefined;
           try {
             const maxIdStmt = db.prepare('SELECT MAX(id) as maxId FROM tasks');
@@ -121,13 +111,13 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             );
             stmt.bind([
               newId,
-              taskConfig.name,
+              taskConfig.name ?? null,
               taskConfig.url ?? null,
               taskConfig.tags ?? null,
               taskConfig.schedule ?? null,
               taskConfig.raw_schedule ?? null,
               taskConfig.alert_if_true ?? 'no',
-              taskConfig.prompt,
+              taskConfig.prompt ?? null,
               taskConfig.chatId!,
             ]);
             stmt.run();
@@ -186,9 +176,16 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             stmt.run();
             stmt.free();
             await saveDb(db);
+            CacheManager.clearTaskCache(taskConfig.chatId!, taskConfig.id!.toString());
           } catch (err) {
             Logger.error({ module: 'Commands', taskId: taskConfig.id, chatId: ctx.chat.id.toString() }, 'Error updating task', err);
-            await ctx.reply(`Error updating task: ${(err as Error).message}`, getTaskListKeyboard(await getTasks(db), 1));
+            await sendOrEditMessage(
+              ctx,
+              ctx.chat.id,
+              ctx.session.listMessageId,
+              `Error updating task: ${(err as Error).message}`,
+              getTaskListKeyboard(await getTasks(db), 1)
+            );
             return;
           }
 
@@ -205,16 +202,13 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
         ctx.session.awaitingEdit = null;
 
         const tasks = await getTasks(db);
-        await ctx.telegram.editMessageText(
+        await sendOrEditMessage(
+          ctx,
           ctx.chat.id,
           ctx.session.listMessageId,
-          undefined,
           'Tasks:',
           getTaskListKeyboard(tasks, 1)
-        ).catch(async () => {
-          const message = await ctx.reply('Tasks:', getTaskListKeyboard(tasks, 1));
-          ctx.session.listMessageId = message.message_id;
-        });
+        );
       } catch (err) {
         Logger.error({ module: 'Commands', chatId: ctx.chat?.id?.toString() }, 'Error processing configuration', err);
         await ctx.reply(`Error processing configuration: ${(err as Error).message}`);

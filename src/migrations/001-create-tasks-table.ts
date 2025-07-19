@@ -4,7 +4,6 @@ import { Logger } from '../utils/logger';
 export async function up(db: Database): Promise<void> {
   const context = { module: 'Migration' };
   try {
-    // Create migrations table if it doesn't exist
     db.run(`
       CREATE TABLE IF NOT EXISTS migrations (
         name TEXT PRIMARY KEY,
@@ -12,13 +11,8 @@ export async function up(db: Database): Promise<void> {
       )
     `);
 
-    // Check if migration has already been applied
     const migrationCheck = db.exec("SELECT name FROM migrations WHERE name = '001-create-tasks-table'");
-
-    // Check current schema of tasks table
-    const schemaCheck = db.exec(`
-      PRAGMA table_info(tasks)
-    `);
+    const schemaCheck = db.exec(`PRAGMA table_info(tasks)`);
     const columns = schemaCheck[0]?.values.map(row => ({
       name: row[1] as string,
       type: row[2] as string,
@@ -38,15 +32,14 @@ export async function up(db: Database): Promise<void> {
       { name: 'chatId', type: 'TEXT', notNull: true, defaultValue: null },
     ];
 
-    const schemaMatches = columns.length > 0 && expectedColumns.every(expected => {
-      const column = columns.find(c => c.name === expected.name);
-      return (
-        column &&
-        column.type === expected.type &&
-        column.notNull === expected.notNull &&
-        column.defaultValue === expected.defaultValue
-      );
-    });
+    const schemaMatches = columns.length === expectedColumns.length &&
+      columns.every((col, i) => {
+        const expected = expectedColumns[i];
+        return col.name === expected.name &&
+               col.type === expected.type &&
+               col.notNull === expected.notNull &&
+               col.defaultValue === expected.defaultValue;
+      });
 
     if (migrationCheck[0]?.values.length && schemaMatches) {
       Logger.info(context, 'Tasks table schema is up-to-date and migration already applied, skipping');
@@ -54,7 +47,6 @@ export async function up(db: Database): Promise<void> {
     }
 
     if (!migrationCheck[0]?.values.length && !columns.length) {
-      // Create tasks table if it doesn't exist and migration not applied
       db.run(`
         CREATE TABLE tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -70,7 +62,6 @@ export async function up(db: Database): Promise<void> {
       `);
       db.run("INSERT INTO migrations (name) VALUES ('001-create-tasks-table')");
     } else if (!schemaMatches) {
-      // Update schema if it doesn't match
       db.run(`
         CREATE TABLE temp_tasks (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -84,14 +75,11 @@ export async function up(db: Database): Promise<void> {
           chatId TEXT NOT NULL
         )
       `);
-
-      // Copy existing data to temporary table
       db.run(`
         INSERT INTO temp_tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId)
         SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId
         FROM tasks
       `);
-
       db.run('DROP TABLE tasks');
       db.run(`
         CREATE TABLE tasks (
@@ -106,21 +94,17 @@ export async function up(db: Database): Promise<void> {
           chatId TEXT NOT NULL
         )
       `);
-
-      // Copy data back to new tasks table
       db.run(`
         INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId)
         SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId
         FROM temp_tasks
       `);
-
       db.run('DROP TABLE temp_tasks');
       if (!migrationCheck[0]?.values.length) {
         db.run("INSERT INTO migrations (name) VALUES ('001-create-tasks-table')");
       }
     }
 
-    // Verify table creation
     const postMigrationCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'");
     if (!postMigrationCheck[0]?.values.length) {
       throw new Error('Failed to create or verify tasks table');

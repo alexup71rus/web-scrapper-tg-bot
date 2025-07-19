@@ -37,7 +37,6 @@ bot.use(new LocalSession().middleware());
 
 const dbPromise = initDb();
 
-// Initializes and starts the Telegram bot
 async function startBot() {
   try {
     const db = await dbPromise;
@@ -55,30 +54,19 @@ async function startBot() {
   }
 }
 
+async function handleShutdown(signal: string) {
+  try {
+    const db = await dbPromise;
+    await saveDb(db);
+    bot.stop(signal);
+    setTimeout(() => process.exit(0), 1000);
+  } catch (err) {
+    Logger.error({ module: 'Index' }, `Error during ${signal} shutdown`, err);
+    process.exit(1);
+  }
+}
+
 startBot();
 
-// Handles SIGINT signal for graceful shutdown
-process.once('SIGINT', async () => {
-  try {
-    const db = await dbPromise;
-    await saveDb(db);
-    bot.stop('SIGINT');
-    setTimeout(() => process.exit(0), 1000);
-  } catch (err) {
-    Logger.error({ module: 'Index' }, 'Error during SIGINT shutdown', err);
-    process.exit(1);
-  }
-});
-
-// Handles SIGTERM signal for graceful shutdown
-process.once('SIGTERM', async () => {
-  try {
-    const db = await dbPromise;
-    await saveDb(db);
-    bot.stop('SIGTERM');
-    setTimeout(() => process.exit(0), 1000);
-  } catch (err) {
-    Logger.error({ module: 'Index' }, 'Error during SIGTERM shutdown', err);
-    process.exit(1);
-  }
-});
+process.once('SIGINT', () => handleShutdown('SIGINT'));
+process.once('SIGTERM', () => handleShutdown('SIGTERM'));

@@ -90,11 +90,6 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
           await ctx.reply('Invalid alert_if_true. Must be "yes" or "no".');
           return;
         }
-        if (!taskConfig.chatId) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid chatId');
-          await ctx.reply('Invalid chatId. Must be a string.');
-          return;
-        }
 
         if (!taskConfig.id && !ctx.session.awaitingEdit) {
           if (!TaskValidator.isValidTaskDTO({ ...taskConfig, id: 0 })) {
@@ -170,7 +165,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
           }
           try {
             const stmt = db.prepare(
-              'UPDATE tasks SET name = ?, url = ?, tags = ?, schedule = ?, raw_schedule = ?, alert_if_true = ?, prompt = ?, chatId = ? WHERE id = ?'
+              'UPDATE tasks SET name = ?, url = ?, tags = ?, schedule = ?, raw_schedule = ?, alert_if_true = ?, prompt = ? WHERE id = ?'
             );
             stmt.bind([
               taskConfig.name ?? existingTask.name,
@@ -180,7 +175,6 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
               taskConfig.raw_schedule || taskConfig.schedule || existingTask.raw_schedule || null,
               taskConfig.alert_if_true || 'no',
               taskConfig.prompt ?? existingTask.prompt,
-              taskConfig.chatId ?? existingTask.chatId,
               taskConfig.id!,
             ]);
             stmt.run();
@@ -188,7 +182,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             await saveDb(db);
           } catch (err) {
             Logger.error({ module: 'Commands', taskId: taskConfig.id, chatId: ctx.chat.id.toString() }, 'Error updating task', err);
-            await ctx.reply(`Error updating task: ${(err as Error).message}`);
+            await ctx.reply(`Error updating task: ${(err as Error).message}`, getTaskListKeyboard(await getTasks(db), 1));
             return;
           }
 

@@ -1,5 +1,5 @@
 import { Database } from 'sql.js';
-import { TaskConfig } from './types';
+import { TaskDTO } from './types';
 import { getTasks } from './services/database';
 import * as cron from 'node-cron';
 import { ScheduledTask } from 'node-cron';
@@ -10,7 +10,7 @@ import { BotContext } from './types';
 import { Logger } from './utils/logger';
 
 // Executes a task by parsing site content and processing it with Ollama
-async function executeTask(task: TaskConfig, bot: Telegraf<BotContext>, isManual: boolean = false): Promise<string> {
+async function executeTask(task: TaskDTO, bot: Telegraf<BotContext>, isManual: boolean = false): Promise<string> {
   const context = { module: 'Scheduler', taskId: task.id, chatId: task.chatId, url: task.url };
   try {
     const tags = task.tags ? task.tags.split(',').map(tag => tag.trim()) : ['body'];

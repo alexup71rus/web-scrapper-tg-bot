@@ -3,10 +3,10 @@ import * as cron from 'node-cron';
 import { Logger } from './logger';
 
 export class TaskValidator {
-  static parseKeyValueConfig(text: string, chatId?: string): Partial<TaskDTO> {
+  static parseKeyValueConfig(text: string, chatId?: string): Partial<TaskConfig> {
     const context = { module: 'TaskValidator', chatId };
     try {
-      const config: Partial<TaskDTO> = {};
+      const config: Partial<TaskConfig> = {};
       const lines = text.trim().split('\n').map(line => line.trim()).filter(line => line);
       if (lines.length === 0) {
         Logger.warn(context, 'No valid lines in configuration');
@@ -25,8 +25,8 @@ export class TaskValidator {
             config.id = Number(value);
           } else if (key === 'alert_if_true' && ['yes', 'no'].includes(value)) {
             config.alert_if_true = value as 'yes' | 'no';
-          } else {
-            config[key as keyof Omit<TaskDTO, 'id' | 'alert_if_true'>] = value;
+          } else if (key !== 'chatId') {
+            config[key as keyof Omit<TaskConfig, 'id' | 'alert_if_true'>] = value;
           }
         } else {
           Logger.warn(context, `Empty key or value in line: ${line}`);
@@ -137,7 +137,6 @@ export class TaskValidator {
         (typeof config.schedule === 'string' ? cron.validate(config.schedule) : config.schedule === undefined) &&
         (typeof config.raw_schedule === 'string' || config.raw_schedule === undefined || config.raw_schedule === null) &&
         (typeof config.prompt === 'string' ? config.prompt.includes('{content}') : config.prompt === undefined) &&
-        (typeof config.chatId === 'string' || config.chatId === undefined) &&
         (typeof config.tags === 'string' || config.tags === undefined || config.tags === null) &&
         (typeof config.alert_if_true === 'string' ? ['yes', 'no'].includes(config.alert_if_true) : config.alert_if_true === undefined)
       );

@@ -35,7 +35,6 @@ export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<
           `schedule=${task.raw_schedule || task.schedule}`,
           `alert_if_true=${task.alert_if_true || 'no'}`,
           `prompt=${task.prompt}`,
-          `chatId=${task.chatId}`,
         ].join('\n');
         await ctx.telegram.editMessageText(
           ctx.chat.id,

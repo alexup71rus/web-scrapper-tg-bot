@@ -9,7 +9,6 @@ export interface TaskConfig {
   raw_schedule?: string;
   alert_if_true?: 'yes' | 'no';
   prompt: string;
-  chatId: string;
 }
 
 export interface TaskDTO {

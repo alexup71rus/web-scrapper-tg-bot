@@ -121,7 +121,7 @@ dist
 .firebase/
 
 # SQL
-tasks.db
+data.db
 
 # TernJS port file
 .tern-port

@@ -13,7 +13,7 @@ export async function saveDb(db: Database): Promise<void> {
       return;
     }
     const data = db.export();
-    await fs.writeFile('./tasks.db', Buffer.from(data));
+    await fs.writeFile('./data.db', Buffer.from(data));
   } catch (err) {
     Logger.error(context, 'Error saving database', err);
     throw err;

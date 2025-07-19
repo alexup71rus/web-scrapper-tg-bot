@@ -11,7 +11,7 @@ export async function initDb(): Promise<Database> {
     let db: Database;
 
     try {
-      const fileBuffer = await fs.readFile('./tasks.db');
+      const fileBuffer = await fs.readFile('./data.db');
       db = new SQL.Database(fileBuffer);
     } catch (err) {
       Logger.error({ module: 'Migrations' }, 'Failed to load existing database, creating new one', err);
@@ -65,7 +65,7 @@ export async function runMigrations(): Promise<Database> {
   try {
     const db = await initDb();
     const data = db.export();
-    await fs.writeFile('./tasks.db', Buffer.from(data));
+    await fs.writeFile('./data.db', Buffer.from(data));
     return db;
   } catch (err) {
     Logger.error({ module: 'Migrations' }, 'Error running migrations', err);

@@ -8,12 +8,12 @@ import { getTaskById } from '../services/database';
 export class CacheManager {
   private static taskCache: Map<string, CacheEntry> = new Map();
   private static queue: QueueEntry[] = [];
-  private static readonly CACHE_TTL = 10 * 1000;
-  private static readonly MAX_CACHE_SIZE = 1000;
-  private static readonly QUEUE_DELAY = 10 * 1000;
-  private static readonly MAX_QUEUE_SIZE = 10;
+  private static readonly CACHE_TTL = Number(process.env.CACHE_TTL) || 10 * 1000;
+  private static readonly MAX_CACHE_SIZE = Number(process.env.MAX_CACHE_SIZE) || 1000;
+  private static readonly QUEUE_DELAY = Number(process.env.QUEUE_DELAY) || 10 * 1000;
+  private static readonly MAX_QUEUE_SIZE = Number(process.env.MAX_QUEUE_SIZE) || 10;
+  private static readonly MAX_RUNNING_TASKS = Number(process.env.MAX_RUNNING_TASKS) || 3;
   private static runningCount = 0;
-  private static readonly MAX_RUNNING_TASKS = 3;
 
   static getCachedResponse(chatId: string, taskId: string): string | null {
     const key = `${chatId}:${taskId}`;

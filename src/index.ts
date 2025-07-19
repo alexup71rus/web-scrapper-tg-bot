@@ -15,6 +15,11 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env'), override: true });
 const token = process.env.BOT_TOKEN;
 const ollamaHost = process.env.CUSTOM_OLLAMA_HOST;
 const ollamaModel = process.env.CUSTOM_OLLAMA_MODEL;
+const cacheTtl = process.env.CACHE_TTL;
+const maxCacheSize = process.env.MAX_CACHE_SIZE;
+const queueDelay = process.env.QUEUE_DELAY;
+const maxQueueSize = process.env.MAX_QUEUE_SIZE;
+const maxRunningTasks = process.env.MAX_RUNNING_TASKS;
 
 if (!token) {
   Logger.error({ module: 'Index' }, 'Missing BOT_TOKEN environment variable');
@@ -26,6 +31,26 @@ if (!ollamaHost) {
 }
 if (!ollamaModel) {
   Logger.error({ module: 'Index' }, 'Missing CUSTOM_OLLAMA_MODEL environment variable');
+  process.exit(1);
+}
+if (!cacheTtl) {
+  Logger.error({ module: 'Index' }, 'Missing CACHE_TTL environment variable');
+  process.exit(1);
+}
+if (!maxCacheSize) {
+  Logger.error({ module: 'Index' }, 'Missing MAX_CACHE_SIZE environment variable');
+  process.exit(1);
+}
+if (!queueDelay) {
+  Logger.error({ module: 'Index' }, 'Missing QUEUE_DELAY environment variable');
+  process.exit(1);
+}
+if (!maxQueueSize) {
+  Logger.error({ module: 'Index' }, 'Missing MAX_QUEUE_SIZE environment variable');
+  process.exit(1);
+}
+if (!maxRunningTasks) {
+  Logger.error({ module: 'Index' }, 'Missing MAX_RUNNING_TASKS environment variable');
   process.exit(1);
 }
 

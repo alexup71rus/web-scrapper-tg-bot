@@ -11,8 +11,8 @@ const ResponseSchema = z.object({
 // Processes prompt and content with Ollama, returns structured or raw response
 export async function processWithOllama(
   prompt: string,
-  content: string,
-  alert_if_true: 'yes' | 'no' = 'no',
+  content: string = '',
+  alert_if_true: 'yes' | 'no' | undefined = 'no',
   chatId?: string
 ): Promise<string> {
   const context = { module: 'Ollama', chatId };
@@ -25,9 +25,9 @@ export async function processWithOllama(
       Logger.error(context, 'Content must be a string');
       return 'Error: Content must be a string';
     }
-    if (!prompt.includes('{content}')) {
-      Logger.error(context, 'Prompt must include {content}');
-      return 'Error: Prompt must include {content}';
+    if (alert_if_true === 'yes' && !prompt.includes('{content}')) {
+      Logger.error(context, 'Prompt must include {content} when alert_if_true is "yes"');
+      return 'Error: Prompt must include {content} when alert_if_true is "yes"';
     }
 
     const ollamaHost = process.env.CUSTOM_OLLAMA_HOST || 'http://localhost:11434';
@@ -47,7 +47,7 @@ export async function processWithOllama(
       return `Error: Ollama server is not reachable: ${(err as Error).message}`;
     }
 
-    const finalPrompt = prompt.replace('{content}', content);
+    const finalPrompt = prompt.includes('{content}') ? prompt.replace('{content}', content) : prompt;
     const options: any = {
       model,
       prompt: finalPrompt,

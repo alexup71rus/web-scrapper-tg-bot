@@ -31,11 +31,11 @@ export async function up(db: Database): Promise<void> {
       CREATE TABLE tasks (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
-        url TEXT NOT NULL,
-        tags TEXT DEFAULT 'body',
-        schedule TEXT NOT NULL,
+        url TEXT,
+        tags TEXT,
+        schedule TEXT,
         raw_schedule TEXT,
-        alert_if_true TEXT DEFAULT 'no',
+        alert_if_true TEXT,
         prompt TEXT NOT NULL,
         chatId TEXT NOT NULL
       )
@@ -46,21 +46,18 @@ export async function up(db: Database): Promise<void> {
         'INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
       );
       for (const row of existingData) {
-        const name = row.name || `Task_${row.id || 'Unknown'}`;
-        const schedule = row.schedule || '* * * * *';
-        const raw_schedule = row.raw_schedule || null;
-        const tags = row.tags || 'body';
-        const prompt = row.prompt || 'Summarize this content: {content}';
+        const name = row.name ? String(row.name) : `Task_${row.id || 'Unknown'}`;
+        const prompt = row.prompt ? String(row.prompt) : 'Default notification';
         const chatId = row.chatId ? String(row.chatId) : null;
-        if (chatId && row.url && row.id) {
+        if (chatId && row.id) {
           stmt.run([
             Number(row.id),
             name,
-            row.url,
-            tags,
-            schedule,
-            raw_schedule,
-            row.alert_if_true || 'no',
+            row.url !== undefined && row.url !== null ? String(row.url) : null,
+            row.tags !== undefined && row.tags !== null ? String(row.tags) : null,
+            row.schedule !== undefined && row.schedule !== null ? String(row.schedule) : null,
+            row.raw_schedule !== undefined && row.raw_schedule !== null ? String(row.raw_schedule) : null,
+            row.alert_if_true !== undefined && row.alert_if_true !== null ? String(row.alert_if_true) : null,
             prompt,
             chatId,
           ]);

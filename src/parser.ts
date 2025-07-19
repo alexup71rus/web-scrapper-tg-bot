@@ -35,15 +35,17 @@ function extractContent(include: string[], exclude: string[]): string {
 }
 
 // Parses a website using Puppeteer and extracts content based on tags
-export async function parseSite(url: string, tags: string[], retries = 2, retryDelay = 2000, chatId?: string, taskId?: number): Promise<string> {
+export async function parseSite(url: string | undefined, tags: string[] | undefined, retries = 2, retryDelay = 2000, chatId?: string, taskId?: number): Promise<string> {
   const context = { module: 'SiteParser', url, chatId, taskId };
   let browser = null;
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       if (!url || !/https?:\/\/.+/.test(url)) {
-        return 'Error: Invalid URL';
+        Logger.error(context, 'Invalid or missing URL');
+        return 'Error: Invalid or missing URL';
       }
       if (!tags || !Array.isArray(tags) || tags.length === 0) {
+        Logger.error(context, 'Tags must be a non-empty array');
         return 'Error: Tags must be a non-empty array';
       }
 

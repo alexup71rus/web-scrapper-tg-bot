@@ -30,11 +30,11 @@ export async function getTasks(db: Database): Promise<TaskDTO[]> {
       const task: TaskDTO = {
         id: Number(row.id),
         name: String(row.name),
-        url: String(row.url),
-        tags: row.tags !== undefined && row.tags !== null ? String(row.tags) : undefined,
-        schedule: String(row.schedule),
-        raw_schedule: row.raw_schedule !== undefined && row.raw_schedule !== null ? String(row.raw_schedule) : undefined,
-        alert_if_true: row.alert_if_true !== undefined && row.alert_if_true !== null ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
+        url: row.url !== null && row.url !== undefined ? String(row.url) : undefined,
+        tags: row.tags !== null && row.tags !== undefined ? String(row.tags) : undefined,
+        schedule: row.schedule !== null && row.schedule !== undefined ? String(row.schedule) : undefined,
+        raw_schedule: row.raw_schedule !== null && row.raw_schedule !== undefined ? String(row.raw_schedule) : undefined,
+        alert_if_true: row.alert_if_true !== null && row.alert_if_true !== undefined ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
         prompt: String(row.prompt),
         chatId: String(row.chatId),
       };
@@ -63,11 +63,11 @@ export async function getTaskById(db: Database, id: number): Promise<TaskDTO | n
       const task: TaskDTO = {
         id: Number(row.id),
         name: String(row.name),
-        url: String(row.url),
-        tags: row.tags !== undefined && row.tags !== null ? String(row.tags) : undefined,
-        schedule: String(row.schedule),
-        raw_schedule: row.raw_schedule !== undefined && row.raw_schedule !== null ? String(row.raw_schedule) : undefined,
-        alert_if_true: row.alert_if_true !== undefined && row.alert_if_true !== null ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
+        url: row.url !== null && row.url !== undefined ? String(row.url) : undefined,
+        tags: row.tags !== null && row.tags !== undefined ? String(row.tags) : undefined,
+        schedule: row.schedule !== null && row.schedule !== undefined ? String(row.schedule) : undefined,
+        raw_schedule: row.raw_schedule !== null && row.raw_schedule !== undefined ? String(row.raw_schedule) : undefined,
+        alert_if_true: row.alert_if_true !== null && row.alert_if_true !== undefined ? String(row.alert_if_true) as 'yes' | 'no' : undefined,
         prompt: String(row.prompt),
         chatId: String(row.chatId),
       };

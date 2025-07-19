@@ -65,36 +65,47 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
           await ctx.reply('Invalid id. Must be a number.');
           return;
         }
-        if (!taskConfig.name) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Missing name. Must be a string');
-          await ctx.reply('Missing name. Must be a string.');
+        if (!taskConfig.name || taskConfig.name.trim().length < 1) {
+          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Missing or empty name');
+          await ctx.reply('Missing or empty name. Must be a non-empty string.');
           return;
         }
-        if (!taskConfig.url || !TaskValidator.isValidUrl(taskConfig.url)) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid or missing URL');
-          await ctx.reply('Invalid or missing URL. Must be a valid URL (e.g., https://example.com).');
+        if (!taskConfig.prompt || taskConfig.prompt.trim().length < 1) {
+          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Missing or empty prompt');
+          await ctx.reply('Missing or empty prompt. Must be a non-empty string.');
           return;
         }
-        if (!taskConfig.prompt || !taskConfig.prompt.includes('{content}')) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid or missing prompt');
-          await ctx.reply('Invalid or missing prompt. Must include {content}.');
+        if (taskConfig.url && !TaskValidator.isValidUrl(taskConfig.url)) {
+          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid URL');
+          await ctx.reply('Invalid URL. Must be a valid URL (e.g., https://example.com) or omitted.');
           return;
         }
-        if (!taskConfig.schedule || !cron.validate(taskConfig.schedule)) {
-          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid or missing schedule');
-          await ctx.reply('Invalid or missing schedule. Use "daily HH:MM" or a valid cron expression.');
+        if (taskConfig.schedule && !cron.validate(taskConfig.schedule)) {
+          Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid schedule');
+          await ctx.reply('Invalid schedule. Use "daily HH:MM" or a valid cron expression, or omit for manual execution.');
           return;
         }
         if (taskConfig.alert_if_true && !['yes', 'no'].includes(taskConfig.alert_if_true)) {
           Logger.warn({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Invalid alert_if_true');
-          await ctx.reply('Invalid alert_if_true. Must be "yes" or "no".');
+          await ctx.reply('Invalid alert_if_true. Must be "yes" or "no", or omit.');
           return;
         }
 
         if (!taskConfig.id && !ctx.session.awaitingEdit) {
-          if (!TaskValidator.isValidTaskDTO({ ...taskConfig, id: 0 })) {
-            Logger.error({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Validation failed for new task configuration', taskConfig);
-            await ctx.reply('Invalid task configuration. All fields except id are required.');
+          const validatedConfig: TaskDTO = {
+            id: 0, // Temporary, will be assigned
+            name: taskConfig.name,
+            prompt: taskConfig.prompt,
+            url: taskConfig.url,
+            tags: taskConfig.tags,
+            schedule: taskConfig.schedule,
+            raw_schedule: taskConfig.raw_schedule,
+            alert_if_true: taskConfig.alert_if_true,
+            chatId: taskConfig.chatId!,
+          };
+          if (!TaskValidator.isValidTaskDTO(validatedConfig)) {
+            Logger.error({ module: 'Commands', chatId: ctx.chat.id.toString() }, 'Validation failed for new task configuration', validatedConfig);
+            await ctx.reply('Invalid task configuration. Check provided fields.');
             return;
           }
           let newId: number | undefined;
@@ -110,13 +121,13 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             );
             stmt.bind([
               newId,
-              taskConfig.name!,
-              taskConfig.url!,
-              taskConfig.tags || 'body',
-              taskConfig.schedule!,
-              taskConfig.raw_schedule || taskConfig.schedule || null,
-              taskConfig.alert_if_true || 'no',
-              taskConfig.prompt!,
+              taskConfig.name,
+              taskConfig.url ?? null,
+              taskConfig.tags ?? null,
+              taskConfig.schedule ?? null,
+              taskConfig.raw_schedule ?? null,
+              taskConfig.alert_if_true ?? 'no',
+              taskConfig.prompt,
               taskConfig.chatId!,
             ]);
             stmt.run();
@@ -130,12 +141,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
               await scheduleTasks(bot, db);
               await ctx.reply(`Task "${taskConfig.name}" added successfully with ID ${newId}! Use /list to view all tasks.`);
             } else {
-              Logger.error(
-                { module: 'Commands', taskId: newId, chatId: ctx.chat.id.toString() },
-                `Failed to schedule or find new task "${taskConfig.name}"`,
-                newTask
-              );
-              await ctx.reply(`Task "${taskConfig.name}" added to database but not scheduled or not found.`);
+              await ctx.reply(`Task "${taskConfig.name}" added successfully with ID ${newId} for manual execution. Use /list to view all tasks.`);
             }
           } catch (err) {
             Logger.error({ module: 'Commands', taskId: newId, chatId: ctx.chat.id.toString() }, 'Error inserting task', err);
@@ -169,11 +175,11 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             );
             stmt.bind([
               taskConfig.name ?? existingTask.name,
-              taskConfig.url ?? existingTask.url,
-              taskConfig.tags || 'body',
-              taskConfig.schedule ?? existingTask.schedule,
-              taskConfig.raw_schedule || taskConfig.schedule || existingTask.raw_schedule || null,
-              taskConfig.alert_if_true || 'no',
+              taskConfig.url ?? existingTask.url ?? null,
+              taskConfig.tags ?? existingTask.tags ?? null,
+              taskConfig.schedule ?? existingTask.schedule ?? null,
+              taskConfig.raw_schedule ?? existingTask.raw_schedule ?? null,
+              taskConfig.alert_if_true ?? existingTask.alert_if_true ?? 'no',
               taskConfig.prompt ?? existingTask.prompt,
               taskConfig.id!,
             ]);
@@ -191,12 +197,7 @@ export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
             await scheduleTasks(bot, db);
             await ctx.reply(`Task "${taskConfig.name ?? existingTask.name}" updated successfully! Use /list to view all tasks.`);
           } else {
-            Logger.error(
-              { module: 'Commands', taskId: taskConfig.id, chatId: ctx.chat.id.toString() },
-              `Failed to schedule or find task ${taskConfig.id}`,
-              task
-            );
-            await ctx.reply(`Task "${taskConfig.name ?? existingTask.name}" updated in database but not scheduled or not found.`);
+            await ctx.reply(`Task "${taskConfig.name ?? existingTask.name}" updated successfully for manual execution. Use /list to view all tasks.`);
           }
         }
 

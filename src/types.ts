@@ -3,9 +3,9 @@ import { Context } from 'telegraf';
 export interface TaskConfig {
   id?: number;
   name: string;
-  url: string;
+  url?: string;
   tags?: string;
-  schedule: string;
+  schedule?: string;
   raw_schedule?: string;
   alert_if_true?: 'yes' | 'no';
   prompt: string;
@@ -14,9 +14,9 @@ export interface TaskConfig {
 export interface TaskDTO {
   id: number;
   name: string;
-  url: string;
+  url?: string;
   tags?: string;
-  schedule: string;
+  schedule?: string;
   raw_schedule?: string;
   alert_if_true?: 'yes' | 'no';
   prompt: string;

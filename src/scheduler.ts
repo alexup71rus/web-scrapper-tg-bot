@@ -9,11 +9,15 @@ import { Telegraf } from 'telegraf';
 import { BotContext } from './types';
 import { Logger } from './utils/logger';
 
-// Executes a task by parsing site content and processing it with Ollama
+// Executes a task by parsing site content or returning prompt for manual notifications
 async function executeTask(task: TaskDTO, bot: Telegraf<BotContext>, isManual: boolean = false): Promise<string> {
   const context = { module: 'Scheduler', taskId: task.id, chatId: task.chatId, url: task.url };
   try {
-    const tags = task.tags ? task.tags.split(',').map(tag => tag.trim()) : ['body'];
+    if (!task.url || !task.tags) {
+      return `Notification: ${task.prompt}\nWarning: Standard notification mode active (no website or tags specified).`;
+    }
+
+    const tags = task.tags.split(',').map(tag => tag.trim());
     const content = await parseSite(task.url, tags, 2, 2000, task.chatId, task.id);
     if (content.startsWith('Error')) {
       return `Task "${task.name}" failed: ${content}`;
@@ -68,9 +72,9 @@ export async function scheduleTasks(bot: Telegraf<BotContext>, db: Database) {
         });
         scheduledTasks.set(task.id, scheduledTask);
       } else {
-        Logger.error(
+        Logger.info(
           { module: 'Scheduler', taskId: task.id, chatId: task.chatId },
-          `Failed to schedule task "${task.name || 'unknown'}": Invalid cron expression or task ID`
+          `Task "${task.name || 'unknown'}" not scheduled: No valid cron expression or intended for manual execution`
         );
       }
     }

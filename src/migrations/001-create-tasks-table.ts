@@ -4,6 +4,7 @@ import { Logger } from '../utils/logger';
 export async function up(db: Database): Promise<void> {
   const context = { module: 'Migration' };
   try {
+    // Create migrations table if it doesn't exist
     db.run(`
       CREATE TABLE IF NOT EXISTS migrations (
         name TEXT PRIMARY KEY,
@@ -11,63 +12,115 @@ export async function up(db: Database): Promise<void> {
       )
     `);
 
+    // Check if migration has already been applied
     const migrationCheck = db.exec("SELECT name FROM migrations WHERE name = '001-create-tasks-table'");
-    if (migrationCheck[0]?.values.length) {
+
+    // Check current schema of tasks table
+    const schemaCheck = db.exec(`
+      PRAGMA table_info(tasks)
+    `);
+    const columns = schemaCheck[0]?.values.map(row => ({
+      name: row[1] as string,
+      type: row[2] as string,
+      notNull: row[3] === 1,
+      defaultValue: row[4],
+    })) || [];
+
+    const expectedColumns = [
+      { name: 'id', type: 'INTEGER', notNull: true, defaultValue: null },
+      { name: 'name', type: 'TEXT', notNull: true, defaultValue: null },
+      { name: 'url', type: 'TEXT', notNull: false, defaultValue: null },
+      { name: 'tags', type: 'TEXT', notNull: false, defaultValue: null },
+      { name: 'schedule', type: 'TEXT', notNull: false, defaultValue: null },
+      { name: 'raw_schedule', type: 'TEXT', notNull: false, defaultValue: null },
+      { name: 'alert_if_true', type: 'TEXT', notNull: false, defaultValue: null },
+      { name: 'prompt', type: 'TEXT', notNull: true, defaultValue: null },
+      { name: 'chatId', type: 'TEXT', notNull: true, defaultValue: null },
+    ];
+
+    const schemaMatches = columns.length > 0 && expectedColumns.every(expected => {
+      const column = columns.find(c => c.name === expected.name);
+      return (
+        column &&
+        column.type === expected.type &&
+        column.notNull === expected.notNull &&
+        column.defaultValue === expected.defaultValue
+      );
+    });
+
+    if (migrationCheck[0]?.values.length && schemaMatches) {
+      Logger.info(context, 'Tasks table schema is up-to-date and migration already applied, skipping');
       return;
     }
 
-    const existingData = [];
-    const tableExists = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'");
-    if (tableExists[0]?.values.length) {
-      const stmt = db.prepare('SELECT * FROM tasks');
-      while (stmt.step()) {
-        existingData.push(stmt.getAsObject());
-      }
-      stmt.free();
+    if (!migrationCheck[0]?.values.length && !columns.length) {
+      // Create tasks table if it doesn't exist and migration not applied
+      db.run(`
+        CREATE TABLE tasks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          url TEXT,
+          tags TEXT,
+          schedule TEXT,
+          raw_schedule TEXT,
+          alert_if_true TEXT,
+          prompt TEXT NOT NULL,
+          chatId TEXT NOT NULL
+        )
+      `);
+      db.run("INSERT INTO migrations (name) VALUES ('001-create-tasks-table')");
+    } else if (!schemaMatches) {
+      // Update schema if it doesn't match
+      db.run(`
+        CREATE TABLE temp_tasks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          url TEXT,
+          tags TEXT,
+          schedule TEXT,
+          raw_schedule TEXT,
+          alert_if_true TEXT,
+          prompt TEXT NOT NULL,
+          chatId TEXT NOT NULL
+        )
+      `);
+
+      // Copy existing data to temporary table
+      db.run(`
+        INSERT INTO temp_tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId)
+        SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId
+        FROM tasks
+      `);
+
       db.run('DROP TABLE tasks');
-    }
+      db.run(`
+        CREATE TABLE tasks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          url TEXT,
+          tags TEXT,
+          schedule TEXT,
+          raw_schedule TEXT,
+          alert_if_true TEXT,
+          prompt TEXT NOT NULL,
+          chatId TEXT NOT NULL
+        )
+      `);
 
-    db.run(`
-      CREATE TABLE tasks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        url TEXT,
-        tags TEXT,
-        schedule TEXT,
-        raw_schedule TEXT,
-        alert_if_true TEXT,
-        prompt TEXT NOT NULL,
-        chatId TEXT NOT NULL
-      )
-    `);
+      // Copy data back to new tasks table
+      db.run(`
+        INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId)
+        SELECT id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId
+        FROM temp_tasks
+      `);
 
-    if (existingData.length > 0) {
-      const stmt = db.prepare(
-        'INSERT INTO tasks (id, name, url, tags, schedule, raw_schedule, alert_if_true, prompt, chatId) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-      );
-      for (const row of existingData) {
-        const name = row.name ? String(row.name) : `Task_${row.id || 'Unknown'}`;
-        const prompt = row.prompt ? String(row.prompt) : 'Default notification';
-        const chatId = row.chatId ? String(row.chatId) : null;
-        if (chatId && row.id) {
-          stmt.run([
-            Number(row.id),
-            name,
-            row.url !== undefined && row.url !== null ? String(row.url) : null,
-            row.tags !== undefined && row.tags !== null ? String(row.tags) : null,
-            row.schedule !== undefined && row.schedule !== null ? String(row.schedule) : null,
-            row.raw_schedule !== undefined && row.raw_schedule !== null ? String(row.raw_schedule) : null,
-            row.alert_if_true !== undefined && row.alert_if_true !== null ? String(row.alert_if_true) : null,
-            prompt,
-            chatId,
-          ]);
-        }
+      db.run('DROP TABLE temp_tasks');
+      if (!migrationCheck[0]?.values.length) {
+        db.run("INSERT INTO migrations (name) VALUES ('001-create-tasks-table')");
       }
-      stmt.free();
     }
 
-    db.run("INSERT INTO migrations (name) VALUES ('001-create-tasks-table')");
-
+    // Verify table creation
     const postMigrationCheck = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'");
     if (!postMigrationCheck[0]?.values.length) {
       throw new Error('Failed to create or verify tasks table');

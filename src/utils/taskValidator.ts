@@ -76,7 +76,7 @@ export class TaskValidator {
       }
       config.id = typeof config.id === 'string' ? Number(config.id) : config.id;
       const checks = [
-        { condition: typeof config.id !== 'number' || isNaN(config.id), message: `Invalid id: ${config.id}` },
+        { condition: config.id !== undefined && (typeof config.id !== 'number' || isNaN(config.id)), message: `Invalid id: ${config.id}` },
         { condition: typeof config.name !== 'string' || config.name.trim().length < 1, message: `Invalid name: ${config.name}` },
         { condition: typeof config.url !== 'string' && config.url !== undefined, message: `Invalid url: ${config.url}` },
         { condition: typeof config.url === 'string' && !this.isValidUrl(config.url), message: `Invalid url format: ${config.url}` },

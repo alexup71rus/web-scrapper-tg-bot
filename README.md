@@ -98,15 +98,3 @@ Migrations preserve existing tasks, updating the schema only when necessary (e.g
 Ollama is used for processing scraped data. Ensure the Ollama server is running and configured in .env.
 Logs are generated for debugging, capturing errors in task execution, scheduling, or migrations.
 Invalid configurations (e.g., empty name/prompt or invalid url/schedule) return error messages in the Telegram chat.
-
-## Project Structure
-
-```
-src/commands/: Telegram command handlers (start, create, list, etc.).
-src/services/database.ts: SQLite database operations.
-src/migrations/: Database schema migrations.
-src/parser.ts: Website scraping with Puppeteer.
-src/ollama.ts: Data processing with Ollama.
-src/scheduler.ts: Task scheduling with node-cron.
-src/utils/: Utilities like logging and task validation.
-```

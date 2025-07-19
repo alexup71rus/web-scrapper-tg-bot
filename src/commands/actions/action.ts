@@ -6,24 +6,7 @@ import { executeTask } from '../../scheduler';
 import { Telegraf } from 'telegraf';
 import { getTaskById, getTasks } from '../../services/database';
 import { Logger } from '../../utils/logger';
-
-async function sendOrEditMessage(
-  ctx: BotContext,
-  chatId: number,
-  messageId: number | undefined,
-  text: string,
-  replyMarkup?: any
-) {
-  try {
-    const message = await ctx.telegram.editMessageText(chatId, messageId, undefined, text, replyMarkup);
-    if (typeof message !== 'boolean') ctx.session.listMessageId = message.message_id;
-    return message;
-  } catch {
-    const message = await ctx.reply(text, replyMarkup);
-    ctx.session.listMessageId = message.message_id;
-    return message;
-  }
-}
+import { sendOrEditMessage } from '../../utils/messageUtils';
 
 export async function handleAction(ctx: BotContext, db: Database, bot: Telegraf<BotContext>) {
   const context = { module: 'Action', taskId: ctx.match?.[1], chatId: ctx.chat?.id?.toString() };

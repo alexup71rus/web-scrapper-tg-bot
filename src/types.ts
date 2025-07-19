@@ -1,4 +1,6 @@
 import { Context } from 'telegraf';
+import { Telegraf } from 'telegraf';
+import { Database } from 'sql.js';
 
 export interface TaskConfig {
   id?: number;
@@ -33,4 +35,19 @@ export interface SessionData {
 export interface BotContext extends Context {
   session: SessionData;
   match?: RegExpMatchArray;
+}
+
+export interface CacheEntry {
+  response: string;
+  timestamp: number;
+}
+
+export interface QueueEntry {
+  chatId: string;
+  taskId: string;
+  task: TaskDTO;
+  bot: Telegraf<BotContext>;
+  db: Database;
+  isManual: boolean;
+  resolve: (result: string) => void;
 }

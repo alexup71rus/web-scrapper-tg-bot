@@ -17,25 +17,8 @@ import { getTaskListKeyboard } from '../keyboard';
 import * as cron from 'node-cron';
 import { scheduleTasks } from '../scheduler';
 import { Logger } from '../utils/logger';
-import {CacheManager} from "../utils/cache";
-
-async function sendOrEditMessage(
-  ctx: BotContext,
-  chatId: number,
-  messageId: number | undefined,
-  text: string,
-  replyMarkup?: any
-) {
-  try {
-    const message = await ctx.telegram.editMessageText(chatId, messageId, undefined, text, replyMarkup);
-    if (typeof message !== 'boolean') ctx.session.listMessageId = message.message_id;
-    return message;
-  } catch {
-    const message = await ctx.reply(text, replyMarkup);
-    ctx.session.listMessageId = message.message_id;
-    return message;
-  }
-}
+import { CacheManager } from '../utils/cache';
+import { sendOrEditMessage } from '../utils/messageUtils';
 
 export async function setupCommands(bot: Telegraf<BotContext>, db: Database) {
   try {

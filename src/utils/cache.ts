@@ -1,29 +1,14 @@
 import { Logger } from './logger';
 import { Telegraf } from 'telegraf';
-import { BotContext, TaskDTO } from '../types';
+import { BotContext, CacheEntry, QueueEntry, TaskDTO } from '../types';
 import { executeTask } from '../scheduler';
 import { Database } from 'sql.js';
 import { getTaskById } from '../services/database';
 
-interface CacheEntry {
-  response: string;
-  timestamp: number;
-}
-
-interface QueueEntry {
-  chatId: string;
-  taskId: string;
-  task: TaskDTO;
-  bot: Telegraf<BotContext>;
-  db: Database;
-  isManual: boolean;
-  resolve: (result: string) => void;
-}
-
 export class CacheManager {
   private static taskCache: Map<string, CacheEntry> = new Map();
   private static queue: QueueEntry[] = [];
-  private static readonly CACHE_TTL = 60 * 1000;
+  private static readonly CACHE_TTL = 10 * 1000;
   private static readonly MAX_CACHE_SIZE = 1000;
   private static readonly QUEUE_DELAY = 10 * 1000;
   private static readonly MAX_QUEUE_SIZE = 10;
